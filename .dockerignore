@@ -4,6 +4,10 @@ node_modules
 .DS_Store
 *.log
 server.log
-data/*.db
-data/*.db-wal
-data/*.db-shm
+.env
+.env.*
+fnos.env
+data/
+coverage/
+playwright-report/
+test-results/

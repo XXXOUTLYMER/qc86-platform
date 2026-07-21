@@ -163,18 +163,36 @@ router.post('/account/password', requireAdmin, (req, res) => {
 // accounts and in-progress phone sessions intentionally stay local.
 router.get('/sync', requireAdmin, (req, res) => {
   const db = getDb();
-  const stats = {
-    providers: db.prepare('SELECT COUNT(*) AS c FROM api_providers').get().c,
-    projects: db.prepare('SELECT COUNT(*) AS c FROM channels').get().c,
-    cards: db.prepare('SELECT COUNT(*) AS c FROM card_keys').get().c,
-    records: db.prepare('SELECT COUNT(*) AS c FROM usage_records').get().c,
-    rejected: db.prepare('SELECT COUNT(*) AS c FROM rejected_phones').get().c
+  const countRows = table => {
+    try {
+      return db.prepare('SELECT COUNT(*) AS c FROM "' + table + '"').get().c;
+    } catch (error) {
+      return 0;
+    }
   };
 
-  res.render('admin/sync', {
-    admin: req.session.admin,
-    stats
-  });
+  try {
+    res.render('admin/sync', {
+      admin: req.session.admin,
+      stats: {
+        providers: countRows('api_providers'),
+        projects: countRows('channels'),
+        cards: countRows('card_keys'),
+        records: countRows('usage_records'),
+        rejected: countRows('rejected_phones')
+      },
+      pageError: null
+    });
+  } catch (error) {
+    // Keep the administrator inside the backend if an old database or a
+    // partially-upgraded template has a problem. A useful message is much
+    // better than Express returning an empty white screen.
+    res.status(500).render('admin/sync', {
+      admin: req.session.admin,
+      stats: { providers: 0, projects: 0, cards: 0, records: 0, rejected: 0 },
+      pageError: '同步中心暂时无法读取完整数据：' + (error.message || '未知错误')
+    });
+  }
 });
 
 router.get('/sync/export', requireAdmin, (req, res) => {

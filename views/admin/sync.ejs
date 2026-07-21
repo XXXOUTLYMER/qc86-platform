@@ -48,6 +48,10 @@
       <p>将 Mac 上测试和管理的数据安全迁移到 NAS，或从 NAS 导出后留作备份。同步包不会包含管理员账号和密码。</p>
     </div>
 
+    <% if (pageError) { %>
+      <div class="sync-result error"><%= pageError %></div>
+    <% } %>
+
     <section class="sync-stats" aria-label="当前数据概览">
       <div class="sync-stat"><div class="sync-stat-label">API 平台</div><div class="sync-stat-value"><%= stats.providers %></div></div>
       <div class="sync-stat"><div class="sync-stat-label">项目</div><div class="sync-stat-value"><%= stats.projects %></div></div>
@@ -145,7 +149,13 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ syncPackage: selectedPackage, confirmation: 'SYNC' })
           });
-          var data = await response.json();
+          var raw = await response.text();
+          var data;
+          try {
+            data = raw ? JSON.parse(raw) : {};
+          } catch (parseError) {
+            throw new Error('服务器返回异常，请查看 NAS 容器日志后重试。');
+          }
           if (!response.ok || !data.success) throw new Error(data.error || '同步失败');
           showResult('success', data.message + ' 备份文件：' + data.backupFilename + '。页面将在 2 秒后更新。');
           window.setTimeout(function () { window.location.reload(); }, 2000);

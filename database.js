@@ -312,8 +312,13 @@ function quoteIdentifier(value) {
   return '"' + String(value).replace(/"/g, '""') + '"';
 }
 
+function tableExists(table) {
+  if (!SYNC_TABLES.includes(table) && !SYNC_DELETE_ORDER.includes(table)) return false;
+  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get([table]));
+}
+
 function getTableColumns(table) {
-  if (!SYNC_TABLES.includes(table)) return [];
+  if (!SYNC_TABLES.includes(table) || !tableExists(table)) return [];
   return db.prepare('PRAGMA table_info(' + quoteIdentifier(table) + ')').all().map(column => column.name);
 }
 
@@ -340,7 +345,10 @@ function createSyncPackage() {
   if (!db) throw new Error('数据库尚未准备好');
   const tables = {};
   SYNC_TABLES.forEach(table => {
-    const rows = db.prepare('SELECT * FROM ' + quoteIdentifier(table)).all();
+    // A few early installations predate rejected_phones and other sync tables.
+    // Treat a missing historical table as empty so export never turns into a
+    // blank error page during an upgrade.
+    const rows = tableExists(table) ? db.prepare('SELECT * FROM ' + quoteIdentifier(table)).all() : [];
     tables[table] = table === 'card_keys' ? rows.map(sanitizeCardForSync) : rows;
   });
 
@@ -391,11 +399,14 @@ function importSyncPackage(syncPackage) {
 
   try {
     db.exec('PRAGMA foreign_keys = OFF; BEGIN TRANSACTION;');
-    SYNC_DELETE_ORDER.forEach(table => db.exec('DELETE FROM ' + quoteIdentifier(table)));
+    SYNC_DELETE_ORDER.forEach(table => {
+      if (tableExists(table)) db.exec('DELETE FROM ' + quoteIdentifier(table));
+    });
 
     SYNC_TABLES.forEach(table => {
       const columns = getTableColumns(table);
       const rows = Array.isArray(syncPackage.tables[table]) ? syncPackage.tables[table] : [];
+      if (columns.length === 0) return;
       rows.forEach(row => {
         if (!row || typeof row !== 'object') throw new Error(table + ' 包含无效数据');
         const insertColumns = columns.filter(column => Object.prototype.hasOwnProperty.call(row, column));

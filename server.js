@@ -19,7 +19,7 @@ app.set('views', path.join(__dirname, 'views'));
 // Middleware
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 if (config.server.secureCookie) app.set('trust proxy', 1);
 app.use(session({
   secret: config.server.sessionSecret,

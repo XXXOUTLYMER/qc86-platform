@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { getDb, saveDb } = require('../database');
+const { getDb, saveDb, createSyncPackage, importSyncPackage } = require('../database');
 const { requireAdmin } = require('../middleware/auth');
 const crypto = require('crypto');
 const axios = require('axios');
@@ -157,6 +157,54 @@ router.post('/account/password', requireAdmin, (req, res) => {
   db.prepare('UPDATE admins SET password_hash=? WHERE id=?').run([passwordHash, admin.id]);
   saveDb();
   res.redirect('/admin/account?success=' + encodeURIComponent('管理员密码已更新'));
+});
+
+// Data sync center. Packages contain operational data only; administrator
+// accounts and in-progress phone sessions intentionally stay local.
+router.get('/sync', requireAdmin, (req, res) => {
+  const db = getDb();
+  const stats = {
+    providers: db.prepare('SELECT COUNT(*) AS c FROM api_providers').get().c,
+    projects: db.prepare('SELECT COUNT(*) AS c FROM channels').get().c,
+    cards: db.prepare('SELECT COUNT(*) AS c FROM card_keys').get().c,
+    records: db.prepare('SELECT COUNT(*) AS c FROM usage_records').get().c,
+    rejected: db.prepare('SELECT COUNT(*) AS c FROM rejected_phones').get().c
+  };
+
+  res.render('admin/sync', {
+    admin: req.session.admin,
+    stats
+  });
+});
+
+router.get('/sync/export', requireAdmin, (req, res) => {
+  try {
+    const syncPackage = createSyncPackage();
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="qc86-data-sync-' + date + '.json"');
+    res.send(JSON.stringify(syncPackage, null, 2));
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message || '导出同步包失败' });
+  }
+});
+
+router.post('/sync/import', requireAdmin, (req, res) => {
+  if (String(req.body.confirmation || '') !== 'SYNC') {
+    return res.status(400).json({ success: false, error: '请确认导入操作后再试' });
+  }
+
+  try {
+    const result = importSyncPackage(req.body.syncPackage);
+    res.json({
+      success: true,
+      message: '数据已同步完成。导入前的 NAS 数据库已自动备份。',
+      backupFilename: result.backupFilename,
+      stats: result.stats
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message || '导入同步包失败' });
+  }
 });
 
 // Dashboard

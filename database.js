@@ -6,6 +6,27 @@ const DB_PATH = path.join(__dirname, 'data', 'platform.db');
 const dir = path.dirname(DB_PATH);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
+// A logical data package is safer than copying the live SQLite file while the
+// service is running. Admin login credentials and in-progress phone sessions
+// intentionally stay on the current device.
+const SYNC_TABLES = [
+  'api_providers',
+  'channels',
+  'card_keys',
+  'usage_records',
+  'rejected_phones',
+  'settings'
+];
+const SYNC_DELETE_ORDER = [
+  'phone_request_jobs',
+  'usage_records',
+  'rejected_phones',
+  'card_keys',
+  'channels',
+  'api_providers',
+  'settings'
+];
+
 let db = null;
 let SQL = null;
 
@@ -287,6 +308,123 @@ function getDb() { return db; }
 
 function saveDb() { if (db) db._save(); }
 
+function quoteIdentifier(value) {
+  return '"' + String(value).replace(/"/g, '""') + '"';
+}
+
+function getTableColumns(table) {
+  if (!SYNC_TABLES.includes(table)) return [];
+  return db.prepare('PRAGMA table_info(' + quoteIdentifier(table) + ')').all().map(column => column.name);
+}
+
+function getSyncStats(tables) {
+  return SYNC_TABLES.reduce((stats, table) => {
+    stats[table] = Array.isArray(tables[table]) ? tables[table].length : 0;
+    return stats;
+  }, {});
+}
+
+function sanitizeCardForSync(card) {
+  const copy = { ...card };
+  const hasSms = String(copy.sms_code || '').trim() !== '' || String(copy.sms_message || '').trim() !== '';
+  if (!hasSms) {
+    copy.phone_number = '';
+    copy.token = '';
+    copy.sms_task_id = '';
+    copy.used_at = null;
+  }
+  return copy;
+}
+
+function createSyncPackage() {
+  if (!db) throw new Error('数据库尚未准备好');
+  const tables = {};
+  SYNC_TABLES.forEach(table => {
+    const rows = db.prepare('SELECT * FROM ' + quoteIdentifier(table)).all();
+    tables[table] = table === 'card_keys' ? rows.map(sanitizeCardForSync) : rows;
+  });
+
+  return {
+    type: 'qc86-platform-data-sync',
+    version: 1,
+    exported_at: new Date().toISOString(),
+    tables,
+    stats: getSyncStats(tables),
+    notes: [
+      '管理员账户不会同步。',
+      '正在等待验证码的临时号码不会同步。'
+    ]
+  };
+}
+
+function validateSyncPackage(syncPackage) {
+  if (!syncPackage || typeof syncPackage !== 'object') throw new Error('同步文件格式不正确');
+  if (syncPackage.type !== 'qc86-platform-data-sync' || syncPackage.version !== 1) {
+    throw new Error('这不是可用的 QC86 数据同步文件');
+  }
+  if (!syncPackage.tables || typeof syncPackage.tables !== 'object') throw new Error('同步文件缺少数据内容');
+
+  let totalRows = 0;
+  SYNC_TABLES.forEach(table => {
+    const rows = syncPackage.tables[table];
+    if (rows !== undefined && !Array.isArray(rows)) throw new Error(table + ' 数据格式不正确');
+    totalRows += Array.isArray(rows) ? rows.length : 0;
+  });
+  if (totalRows > 200000) throw new Error('同步文件数据量过大，请先清理历史记录后再导入');
+}
+
+function createSyncBackup() {
+  if (!db) throw new Error('数据库尚未准备好');
+  db._save();
+  const backupDir = path.join(dir, 'backups');
+  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = 'before-sync-' + stamp + '.db';
+  fs.copyFileSync(DB_PATH, path.join(backupDir, filename));
+  return filename;
+}
+
+function importSyncPackage(syncPackage) {
+  if (!db) throw new Error('数据库尚未准备好');
+  validateSyncPackage(syncPackage);
+  const backupFilename = createSyncBackup();
+
+  try {
+    db.exec('PRAGMA foreign_keys = OFF; BEGIN TRANSACTION;');
+    SYNC_DELETE_ORDER.forEach(table => db.exec('DELETE FROM ' + quoteIdentifier(table)));
+
+    SYNC_TABLES.forEach(table => {
+      const columns = getTableColumns(table);
+      const rows = Array.isArray(syncPackage.tables[table]) ? syncPackage.tables[table] : [];
+      rows.forEach(row => {
+        if (!row || typeof row !== 'object') throw new Error(table + ' 包含无效数据');
+        const insertColumns = columns.filter(column => Object.prototype.hasOwnProperty.call(row, column));
+        if (insertColumns.length === 0) return;
+        const sql = 'INSERT INTO ' + quoteIdentifier(table) + ' (' + insertColumns.map(quoteIdentifier).join(', ') + ') VALUES (' + insertColumns.map(() => '?').join(', ') + ')';
+        db.prepare(sql).run(insertColumns.map(column => row[column]));
+      });
+    });
+
+    db.exec('COMMIT; PRAGMA foreign_keys = ON;');
+    db._save();
+  } catch (error) {
+    try { db.exec('ROLLBACK; PRAGMA foreign_keys = ON;'); } catch (rollbackError) {}
+    throw error;
+  }
+
+  return {
+    backupFilename,
+    stats: getSyncStats(syncPackage.tables)
+  };
+}
+
 function closeDb() { if (db) { db.close(); db = null; } }
 
-module.exports = { initDb, getDb, saveDb, closeDb };
+module.exports = {
+  initDb,
+  getDb,
+  saveDb,
+  closeDb,
+  createSyncPackage,
+  importSyncPackage
+};

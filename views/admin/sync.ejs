@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据同步 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .sync-page { max-width: 980px; }
+    .sync-heading { margin-bottom: 20px; }
+    .sync-heading h2 { margin: 0 0 7px; color: #1d1d1f; }
+    .sync-heading p { margin: 0; color: #6e6e73; font-size: 13px; line-height: 1.65; }
+    .sync-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .sync-stat { min-width: 0; padding: 14px; border: 1px solid #e7e7eb; border-radius: 8px; background: #fff; }
+    .sync-stat-label { color: #86868b; font-size: 12px; }
+    .sync-stat-value { margin-top: 5px; color: #1d1d1f; font-size: 23px; font-weight: 700; line-height: 1; }
+    .sync-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .sync-panel { padding: 22px; border: 1px solid #e7e7eb; border-radius: 8px; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .035); }
+    .sync-step { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; margin-bottom: 13px; border-radius: 50%; background: #1d1d1f; color: #fff; font-size: 12px; font-weight: 700; }
+    .sync-panel h3 { margin: 0 0 8px; color: #1d1d1f; font-size: 17px; }
+    .sync-panel p { min-height: 42px; margin: 0 0 17px; color: #6e6e73; font-size: 13px; line-height: 1.6; }
+    .sync-file { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px dashed #c9c9cf; border-radius: 8px; background: #fafafa; color: #4b4b50; font-size: 12px; }
+    .sync-file:focus { outline: 0; border-color: #1d1d1f; }
+    .sync-file-info { min-height: 20px; margin: 10px 0 14px; color: #6e6e73; font-size: 12px; line-height: 1.5; }
+    .sync-warning { margin-top: 16px; padding: 15px 17px; border: 1px solid #f2d6aa; border-radius: 8px; background: #fffaf0; color: #7c4b05; font-size: 13px; line-height: 1.7; }
+    .sync-warning strong { color: #6c3f00; }
+    .sync-result { display: none; margin-top: 16px; padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; }
+    .sync-result.success { display: block; border: 1px solid #b9e2c0; background: #f2fbf3; color: #216c2b; }
+    .sync-result.error { display: block; border: 1px solid #f1c2c2; background: #fff5f5; color: #b42318; }
+    .sync-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .sync-actions .btn-apple { min-height: 38px; }
+    @media (max-width: 760px) {
+      .sync-page { padding-left: 14px; padding-right: 14px; }
+      .sync-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sync-stat:last-child { grid-column: span 2; }
+      .sync-grid { grid-template-columns: 1fr; }
+      .sync-panel { padding: 18px; }
+      .sync-panel p { min-height: auto; }
+      .sync-actions .btn-apple { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'sync' }) %>
+  <main class="main sync-page">
+    <div class="sync-heading">
+      <h2>数据同步</h2>
+      <p>将 Mac 上测试和管理的数据安全迁移到 NAS，或从 NAS 导出后留作备份。同步包不会包含管理员账号和密码。</p>
+    </div>
+
+    <section class="sync-stats" aria-label="当前数据概览">
+      <div class="sync-stat"><div class="sync-stat-label">API 平台</div><div class="sync-stat-value"><%= stats.providers %></div></div>
+      <div class="sync-stat"><div class="sync-stat-label">项目</div><div class="sync-stat-value"><%= stats.projects %></div></div>
+      <div class="sync-stat"><div class="sync-stat-label">卡密</div><div class="sync-stat-value"><%= stats.cards %></div></div>
+      <div class="sync-stat"><div class="sync-stat-label">使用记录</div><div class="sync-stat-value"><%= stats.records %></div></div>
+      <div class="sync-stat"><div class="sync-stat-label">筛掉的号码</div><div class="sync-stat-value"><%= stats.rejected %></div></div>
+    </section>
+
+    <section class="sync-grid">
+      <div class="sync-panel">
+        <span class="sync-step">1</span>
+        <h3>导出此设备的数据</h3>
+        <p>在 Mac 后台导出后，将下载的同步文件保存好；它可以导入到 NAS，也可以作为一份可回退的数据备份。</p>
+        <a class="btn-apple btn-apple-primary" href="/admin/sync/export">导出同步包</a>
+      </div>
+
+      <div class="sync-panel">
+        <span class="sync-step">2</span>
+        <h3>导入另一台设备的数据</h3>
+        <p>选择从 Mac 或 NAS 导出的同步包。导入前会先自动备份本机当前数据库。</p>
+        <input class="sync-file" id="syncFile" type="file" accept="application/json,.json">
+        <div class="sync-file-info" id="syncFileInfo">还没有选择同步文件</div>
+        <div class="sync-actions">
+          <button class="btn-apple btn-apple-primary" id="importSyncBtn" type="button" disabled>导入并同步</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="sync-warning">
+      <strong>导入前请确认：</strong>导入会替换本机的 API 配置、项目、卡密、使用记录、筛选记录与后台设置。管理员账号和密码会保留；正在等待验证码的临时号码不会同步，避免两台设备重复操作同一个号码。每次导入前，系统都会自动保存本机数据库备份。
+    </div>
+    <div class="sync-result" id="syncResult" role="status"></div>
+  </main>
+
+  <script>
+    (function () {
+      var fileInput = document.getElementById('syncFile');
+      var fileInfo = document.getElementById('syncFileInfo');
+      var importButton = document.getElementById('importSyncBtn');
+      var result = document.getElementById('syncResult');
+      var selectedPackage = null;
+
+      function showResult(type, message) {
+        result.className = 'sync-result ' + type;
+        result.textContent = message;
+      }
+
+      function describePackage(data) {
+        var stats = data && data.stats ? data.stats : {};
+        return '已选择：' + (data.exported_at ? new Date(data.exported_at).toLocaleString() : '未知时间') +
+          ' 导出的同步包，含 ' + (stats.card_keys || 0) + ' 张卡密、' + (stats.usage_records || 0) + ' 条使用记录。';
+      }
+
+      fileInput.addEventListener('change', function () {
+        selectedPackage = null;
+        importButton.disabled = true;
+        result.className = 'sync-result';
+        result.textContent = '';
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) {
+          fileInfo.textContent = '还没有选择同步文件';
+          return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            var parsed = JSON.parse(String(reader.result || ''));
+            if (parsed.type !== 'qc86-platform-data-sync' || parsed.version !== 1) {
+              throw new Error('这不是可用的 QC86 同步文件');
+            }
+            selectedPackage = parsed;
+            importButton.disabled = false;
+            fileInfo.textContent = describePackage(parsed);
+          } catch (error) {
+            fileInfo.textContent = '文件无法读取：' + error.message;
+            showResult('error', '请选择由“数据同步”页面导出的 JSON 文件。');
+          }
+        };
+        reader.onerror = function () {
+          fileInfo.textContent = '读取文件失败，请重新选择。';
+        };
+        reader.readAsText(file, 'utf-8');
+      });
+
+      importButton.addEventListener('click', async function () {
+        if (!selectedPackage) return;
+        if (!window.confirm('确定导入吗？本机现有的项目、卡密、使用记录和设置将被同步包替换。系统会先自动备份本机数据库。')) return;
+
+        importButton.disabled = true;
+        importButton.textContent = '正在同步...';
+        try {
+          var response = await fetch('/admin/sync/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ syncPackage: selectedPackage, confirmation: 'SYNC' })
+          });
+          var data = await response.json();
+          if (!response.ok || !data.success) throw new Error(data.error || '同步失败');
+          showResult('success', data.message + ' 备份文件：' + data.backupFilename + '。页面将在 2 秒后更新。');
+          window.setTimeout(function () { window.location.reload(); }, 2000);
+        } catch (error) {
+          showResult('error', error.message || '同步失败，请重试。');
+          importButton.disabled = false;
+          importButton.textContent = '导入并同步';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

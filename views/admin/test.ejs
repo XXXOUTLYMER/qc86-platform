@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>测试管理 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .test-card { background: #fff; border-radius: 14px; padding: 22px 24px; box-shadow: 0 0 0 1px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 16px; }
+    .recent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+    .recent-item { background: #f5f5f7; border-radius: 12px; padding: 14px 16px; cursor: pointer; transition: all .2s; border: 1px solid transparent; }
+    .recent-item:hover { background: #e8e8ed; border-color: #007aff; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    .recent-item .code { font-family: 'SF Mono', monospace; font-size: 12px; color: #1d1d1f; font-weight: 600; }
+    .recent-item .meta { font-size: 11px; color: #86868b; margin-top: 4px; display: flex; align-items: center; gap: 8px; }
+    .recent-item .meta .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .recent-item .meta .dot.used { background: #ff3b30; }
+    .recent-item .meta .dot.unused { background: #34c759; }
+    .recent-item .meta .dot.waiting { background: #ff9500; }
+    .countdown-ring { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #ff9500; }
+    .countdown-ring svg { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .sms-auto-arrived { animation: pulse-glow 0.6s ease-out; }
+    @keyframes pulse-glow { 0% { box-shadow: 0 0 0 0 rgba(52,199,89,0.4); } 100% { box-shadow: 0 0 0 16px rgba(52,199,89,0); } }
+    .test-card h3 { font-size: 15px; font-weight: 600; color: #1d1d1f; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .search-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .search-row input { padding: 8px 14px; border: 1px solid #d1d1d6; border-radius: 8px; font-size: 14px; outline: none; min-width: 260px; font-family: monospace; }
+    .search-row input:focus { border-color: #007AFF; box-shadow: 0 0 0 3px rgba(0,122,255,0.12); }
+    .state-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
+    .state-item { background: #f5f5f7; border-radius: 10px; padding: 12px 14px; }
+    .state-item .label { font-size: 11px; color: #86868b; margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
+    .state-item .value { font-size: 16px; font-weight: 600; color: #1d1d1f; font-family: 'SF Mono', monospace; }
+    .state-item .value.sms-code { font-size: 22px; color: #ff3b30; letter-spacing: 1px; }
+    .state-item .value.phone { font-size: 18px; }
+    .action-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .form-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .form-inline input { padding: 8px 12px; border: 1px solid #d1d1d6; border-radius: 8px; font-size: 13px; outline: none; }
+    .form-inline input:focus { border-color: #007AFF; box-shadow: 0 0 0 3px rgba(0,122,255,0.12); }
+    .form-inline input[type="text"] { min-width: 120px; }
+    .tag-test { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: rgba(175,82,222,0.12); color: #af52de; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #86868b; }
+    .empty-state .icon { font-size: 40px; margin-bottom: 10px; }
+    .empty-state p { font-size: 13px; }
+    .toast { position: fixed; top: 72px; left: 50%; transform: translateX(-50%) translateY(-12px); background: #1d1d1f; color: #fff; padding: 10px 22px; border-radius: 12px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.18); z-index: 9999; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; white-space: nowrap; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    .toast-error { background: #FF3B30; }
+    .preview-panel { border: 1px solid rgba(52,199,89,.22); background: linear-gradient(145deg, #ffffff, #f5fbf7); }
+    .preview-panel h3 { margin-bottom: 6px; }
+    .preview-panel p { color: #6e6e73; font-size: 13px; line-height: 1.6; margin: 0 0 16px; }
+    .preview-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .preview-action { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 9px 12px; border: 1px solid #d8d8dc; border-radius: 9px; background: rgba(255,255,255,.88); color: #1d1d1f; font-size: 13px; font-weight: 600; text-decoration: none; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease; }
+    .preview-action:hover { transform: translateY(-1px); border-color: #34c759; background: #fff; box-shadow: 0 6px 18px rgba(20,90,45,.1); }
+    .preview-action svg { flex: 0 0 auto; color: #248a3d; }
+    @media (max-width: 640px) {
+      .preview-actions { grid-template-columns: 1fr; }
+      .preview-action { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'test' }) %>
+  <div class="main">
+    <h2 style="display:flex;align-items:center;gap:8px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#af52de" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      测试管理
+    </h2>
+    <p style="color:#86868b;font-size:13px;margin-bottom:16px">测试卡密管理 — 输入测试卡密，手动获取虚拟号码和发送验证码</p>
+
+    <% if (typeof success !== 'undefined' && success) { %><div class="message message-success"><%= success %></div><% } %>
+    <% if (typeof error !== 'undefined' && error) { %><div class="message message-error"><%= error %></div><% } %>
+
+    <div class="test-card preview-panel">
+      <h3>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#248a3d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        用户界面测试模式
+      </h3>
+      <p>无需输入卡密，直接查看完整用户界面。所有号码和验证码均为本地模拟，不写入数据库，也不会请求接码 API。</p>
+      <div class="preview-actions">
+        <a class="preview-action" href="/admin/test/preview?state=waiting" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          等待验证码
+        </a>
+        <a class="preview-action" href="/admin/test/preview?state=cooldown" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
+          冷却倒计时
+        </a>
+        <a class="preview-action" href="/admin/test/preview?state=success" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+          已收到验证码
+        </a>
+      </div>
+    </div>
+
+    <div class="test-card" id="recent-cards-section">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#af52de" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        最近测试卡密
+        <span style="font-size:12px;color:#86868b;font-weight:400;margin-left:4px" id="recentCount"></span>
+      </h3>
+      <div id="recentCardsList">
+        <% if (typeof recentCards !== 'undefined' && recentCards.length > 0) { %>
+          <div class="recent-grid">
+          <% recentCards.forEach(function(c) { %>
+            <div class="recent-item" onclick="window.location.href='/admin/test?card_code=<%= encodeURIComponent(c.code) %>'">
+              <div class="code"><%= c.code %></div>
+              <div class="meta">
+                <span class="dot <%= c.sms_code ? 'used' : (c.phone_number ? 'waiting' : 'unused') %>"></span>
+                <span><%= c.phone_number ? c.phone_number : '等待获取号码' %></span>
+                <span style="margin-left:auto"><%= c.created_at %></span>
+              </div>
+              <% if (c.sms_code) { %>
+              <div class="meta" style="margin-top:2px;color:#34c759;font-weight:500">验证码: <%= c.sms_code %></div>
+              <% } %>
+            </div>
+          <% }); %>
+          </div>
+        <% } else { %>
+          <p style="color:#86868b;font-size:13px">暂无测试卡密</p>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="test-card">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        搜索测试卡密
+      </h3>
+      <form method="GET" action="/admin/test">
+        <div class="search-row">
+          <input type="text" name="card_code" placeholder="输入测试卡密（16位，含横线）" value="<%= searchCode %>" autocomplete="off">
+          <button type="submit" class="btn-apple btn-apple-primary">🔍 查询</button>
+          <a href="/admin/test" class="btn-apple btn-apple-secondary">清除</a>
+        </div>
+      </form>
+    </div>
+
+    <% if (typeof card !== 'undefined' && card) { %>
+    <div class="test-card" id="cardPanel">
+      <h3>
+        <span class="tag-test">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          测试卡密
+        </span>
+        <span style="font-family:monospace;font-size:14px;color:#1d1d1f;font-weight:500"><%= card.code %></span>
+        <span class="badge-apple badge-apple-<%= card.status %>" style="margin-left:auto">
+          <%= {'unused':'未使用','used':'已使用','expired':'已过期'}[card.status] || card.status %>
+        </span>
+      </h3>
+
+      <div class="state-grid">
+        <div class="state-item">
+          <div class="label">手机号</div>
+          <div class="value phone" id="statePhone"><%= card.phone_number || '-' %></div>
+        </div>
+        <div class="state-item">
+          <div class="label">验证码</div>
+          <div class="value sms-code" id="stateSmsCode"><%= card.sms_code || '-' %></div>
+        </div>
+        <div class="state-item">
+          <div class="label">验证消息</div>
+          <div class="value" style="font-size:13px" id="stateSmsMsg"><%= card.sms_message || '-' %></div>
+        </div>
+        <div class="state-item">
+          <div class="label">获取次数</div>
+          <div class="value"><%= card.attempts || 0 %> / <%= card.max_attempts || 3 %></div>
+        </div>
+        <div class="state-item">
+          <div class="label">项目</div>
+          <div class="value" style="font-size:13px"><%= card.channel_name || '-' %></div>
+        </div>
+        <div class="state-item">
+          <div class="label">指定号段</div>
+          <div class="value" style="font-size:13px;color:<%= card.channel_prefix ? '#ff9500' : '#86868b' %>"><%= card.channel_prefix || '未设置' %></div>
+        </div>
+        <div class="state-item">
+          <div class="label">创建时间</div>
+          <div class="value" style="font-size:12px;font-weight:400"><%= card.created_at %></div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #f2f2f7;margin:14px 0 0;padding-top:14px">
+        <h4 style="font-size:13px;font-weight:600;color:#1d1d1f;margin-bottom:10px">操作</h4>
+
+        <% if (card.is_test == 1) { %>
+        <div class="action-row">
+          <button class="btn-apple btn-apple-primary" onclick="getTestPhone('<%= card.code %>')" id="getPhoneBtn">
+            📞 获取测试号码
+          </button>
+
+          <div class="form-inline">
+            <input type="text" id="smsCodeInput" placeholder="验证码" style="width:110px;font-family:monospace;font-weight:600">
+            <input type="text" id="smsMsgInput" placeholder="短信内容（可选）" style="width:180px">
+            <button class="btn-apple btn-apple-success" onclick="sendTestCode('<%= card.code %>')" id="sendCodeBtn">
+              💬 发送验证码
+            </button>
+          </div>
+
+          <button class="btn-apple btn-apple-warning" onclick="checkTestPrefix('<%= card.code %>')" id="checkPrefixBtn">
+            🔍 检查号段
+          </button>
+          <button class="btn-apple btn-apple-secondary" onclick="resetTestCard('<%= card.code %>')" id="resetBtn">
+            🔄 重置卡密
+          </button>
+        </div>
+        <% } else { %>
+        <div style="padding:12px 16px;background:#fff3e0;border-radius:8px;font-size:13px;color:#e67e22">
+          ⚠️ 该卡密不是测试卡密。请使用标记为"测试卡密"的卡密进行测试。
+        </div>
+        <% } %>
+      </div>
+    </div>
+    <% } else if (searchCode) { %>
+    <div class="test-card">
+      <div class="empty-state">
+        <div class="icon">🔍</div>
+        <p>未找到卡密 "<strong><%= searchCode %></strong>"，请检查卡密是否正确</p>
+      </div>
+    </div>
+    <% } else { %>
+    <div class="test-card">
+      <div class="empty-state">
+        <div class="icon">🧪</div>
+        <p>请输入测试卡密进行管理</p>
+        <p style="font-size:12px;color:#aaa;margin-top:6px">在 <a href="/admin/cards">卡密管理</a> 中生成测试卡密后方可在此页面测试</p>
+      </div>
+    </div>
+    <% } %>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // Auto-refresh recent test cards every 5 seconds
+    var recentPollInterval = setInterval(function() {
+      fetch('/admin/test/recent').then(function(r) { return r.json(); }).then(function(data) {
+        if (data.cards && data.cards.length) {
+          var list = document.getElementById('recentCardsList');
+          if (!list) return;
+          var count = document.getElementById('recentCount');
+          if (count) count.textContent = '(' + data.cards.length + ')';
+          var html = '<div class="recent-grid">';
+          data.cards.forEach(function(c) {
+            var dotClass = c.sms_code ? 'used' : (c.phone_number ? 'waiting' : 'unused');
+            html += '<div class="recent-item" onclick="window.location.href=\'/admin/test?card_code=\' + encodeURIComponent(c.code) + \'\'">';
+            html += '<div class="code">' + c.code + '</div>';
+            html += '<div class="meta"><span class="dot ' + dotClass + '"></span>';
+            html += '<span>' + (c.phone_number || '等待获取号码') + '</span>';
+            html += '<span style="margin-left:auto">' + (c.created_at || '') + '</span></div>';
+            if (c.sms_code) html += '<div class="meta" style="margin-top:2px;color:#34c759;font-weight:500">验证码: ' + c.sms_code + '</div>';
+            if (c.channel_prefix) html += '<div class="meta" style="margin-top:1px;color:#ff9500;font-size:10px">号段: ' + c.channel_prefix + '</div>';
+            html += '</div>';
+          });
+          html += '</div>';
+          list.innerHTML = html;
+        }
+      }).catch(function() {});
+    }, 5000);
+
+    var smsPollTimer = null;
+    var countdownTimer = null;
+    var countdownSeconds = 0;
+    var currentCardId = null;
+
+    function showToast(msg, type) {
+      var t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast' + (type === 'error' ? ' toast-error' : '') + ' show';
+      clearTimeout(t._hide);
+      t._hide = setTimeout(function() { t.classList.remove('show'); }, 2500);
+    }
+
+    function startSmsCountdown(cardId) {
+      currentCardId = cardId;
+      countdownSeconds = 30;
+      
+      if (countdownTimer) clearInterval(countdownTimer);
+      if (smsPollTimer) clearInterval(smsPollTimer);
+      
+      // Show countdown
+      var smsCodeEl = document.getElementById('stateSmsCode');
+      if (smsCodeEl) smsCodeEl.innerHTML = '<span class="countdown-ring"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 自动获取中 ' + countdownSeconds + 's</span>';
+      
+      countdownTimer = setInterval(function() {
+        countdownSeconds--;
+        if (countdownSeconds <= 0) {
+          clearInterval(countdownTimer);
+          countdownTimer = null;
+          // Start polling for SMS
+          smsPollTimer = setInterval(function() {
+            checkTestSms(cardId);
+          }, 2000);
+          return;
+        }
+        var el = document.querySelector('#stateSmsCode .countdown-ring');
+        if (el) el.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 自动获取中 ' + countdownSeconds + 's';
+      }, 1000);
+    }
+
+    function checkTestSms(cardId) {
+      fetch('/admin/test/check-sms/' + cardId).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.found) {
+          if (smsPollTimer) { clearInterval(smsPollTimer); smsPollTimer = null; }
+          // Show animated SMS code arrival
+          document.getElementById('stateSmsCode').innerHTML = '<span class="sms-auto-arrived" style="display:inline-block;padding:4px 12px;background:#e8f5e9;border-radius:8px">' + data.smsCode + '</span>';
+          document.getElementById('stateSmsMsg').textContent = data.smsMessage || '-';
+          var badges = document.querySelectorAll('.badge-apple');
+          badges.forEach(function(b) { b.textContent = '已使用'; b.className = 'badge-apple badge-apple-used'; });
+          showToast('✅ 验证码已自动获取: ' + data.smsCode);
+          // Also update the phone number if it changed
+          if (data.phoneNumber) {
+            document.getElementById('statePhone').textContent = data.phoneNumber;
+          }
+        }
+      }).catch(function() {});
+    }
+
+    function showSmsCountdownOnCard(cardId) {
+      var smsCodeEl = document.getElementById('stateSmsCode');
+      if (smsCodeEl && smsCodeEl.textContent.trim() === '-' || (smsCodeEl && smsCodeEl.textContent.trim() === '')) {
+        // Only start countdown if there's no SMS code yet
+        var cardDataScript = document.getElementById('cardData');
+        if (cardDataScript) {
+          try {
+            var cardData = JSON.parse(cardDataScript.textContent);
+            if (cardData.sms_code) return; // already has code
+          } catch(e) {}
+        }
+        startSmsCountdown(cardId);
+      }
+    }
+
+    // Auto-start SMS countdown if card has phone but no SMS on page load
+    (function() {
+      var cardDataScript = document.getElementById('cardData');
+      if (cardDataScript) {
+        try {
+          var cardData = JSON.parse(cardDataScript.textContent);
+          if (cardData.sms_code) {
+            // Already has SMS, just update display
+          } else if (cardData.phone_number && cardData.phone_number !== '') {
+            // Has phone but no SMS yet - start countdown
+            startSmsCountdown(cardData.id);
+          }
+        } catch(e) {}
+      }
+    })();
+
+    async function getTestPhone(code) {
+      var btn = document.getElementById('getPhoneBtn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:5px"></span> 获取中...'; }
+      try {
+        var resp = await fetch('/admin/test/get-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_code: code })
+        });
+        var data = await resp.json();
+        if (data.success) {
+          showToast('✅ 测试号码: ' + data.phoneNumber);
+          document.getElementById('statePhone').textContent = data.phoneNumber;
+          if (btn) btn.innerHTML = '📞 重新获取测试号码';
+          // Start 30s countdown for auto SMS
+          if (data.card && data.card.id) {
+            startSmsCountdown(data.card.id);
+          }
+        } else {
+          showToast('❌ ' + (data.error || '获取失败'), 'error');
+        }
+      } catch(e) { showToast('❌ 请求失败', 'error'); }
+      if (btn) btn.disabled = false;
+    }
+
+    async function getTestPhone(code) {
+      var btn = document.getElementById('getPhoneBtn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:5px"></span> 获取中...'; }
+      try {
+        var resp = await fetch('/admin/test/get-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_code: code })
+        });
+        var data = await resp.json();
+        if (data.success) {
+          showToast('✅ 测试号码: ' + data.phoneNumber);
+          document.getElementById('statePhone').textContent = data.phoneNumber;
+          if (btn) btn.innerHTML = '📞 重新获取测试号码';
+        } else {
+          showToast('❌ ' + (data.error || '获取失败'), 'error');
+        }
+      } catch(e) { showToast('❌ 请求失败', 'error'); }
+      if (btn) btn.disabled = false;
+    }
+
+    async function sendTestCode(code) {
+      var smsCode = document.getElementById('smsCodeInput').value.trim();
+      if (!smsCode) { showToast('请填写验证码', 'error'); return; }
+      var smsMsg = document.getElementById('smsMsgInput').value.trim();
+
+      var btn = document.getElementById('sendCodeBtn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '发送中...'; }
+      try {
+        var resp = await fetch('/admin/test/send-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_code: code, sms_code: smsCode, sms_message: smsMsg })
+        });
+        var data = await resp.json();
+        if (data.success) {
+          showToast('✅ 验证码已发送');
+          document.getElementById('stateSmsCode').textContent = smsCode;
+          document.getElementById('stateSmsMsg').textContent = smsMsg || '-';
+          // Update badge
+          var badges = document.querySelectorAll('.badge-apple');
+          badges.forEach(function(b) { b.textContent = '已使用'; b.className = 'badge-apple badge-apple-used'; });
+        } else {
+          showToast('❌ ' + (data.error || '发送失败'), 'error');
+        }
+      } catch(e) { showToast('❌ 请求失败', 'error'); }
+      if (btn) { btn.disabled = false; btn.innerHTML = '💬 发送验证码'; }
+    }
+
+    async function checkTestPrefix(code) {
+      var btn = document.getElementById('checkPrefixBtn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '检查中...'; }
+      try {
+        // Get card ID from the card data
+        var cardDataScript = document.getElementById('cardData');
+        if (!cardDataScript) { showToast('未找到卡密数据', 'error'); if(btn){btn.disabled=false;btn.innerHTML='🔍 检查号段'} return; }
+        var cardData = JSON.parse(cardDataScript.textContent);
+        if (!cardData.id) { showToast('卡密ID无效', 'error'); if(btn){btn.disabled=false;btn.innerHTML='🔍 检查号段'} return; }
+        
+        var resp = await fetch('/admin/cards/check-prefix/' + cardData.id, { method: 'POST' });
+        var data = await resp.json();
+        if (data.success) {
+          if (data.match) {
+            showToast('✅ ' + (data.message || '号码符合号段'));
+          } else {
+            showToast('🔄 ' + (data.message || '号码已释放'));
+            document.getElementById('statePhone').textContent = '-';
+          }
+        } else {
+          showToast((data.match === false ? '🔄 ' : 'ℹ️ ') + (data.error || '操作完成'), 'info');
+        }
+      } catch(e) { showToast('❌ 请求失败', 'error'); }
+      if (btn) { btn.disabled = false; btn.innerHTML = '🔍 检查号段'; }
+    }
+
+    async function resetTestCard(code) {
+      if (!confirm('确定重置此测试卡密？将清空手机号和验证码。')) return;
+      var btn = document.getElementById('resetBtn');
+      if (btn) btn.disabled = true;
+      try {
+        var resp = await fetch('/admin/test/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_code: code })
+        });
+        var data = await resp.json();
+        if (data.success) {
+          showToast('✅ 卡密已重置');
+          document.getElementById('statePhone').textContent = '-';
+          document.getElementById('stateSmsCode').textContent = '-';
+          document.getElementById('stateSmsMsg').textContent = '-';
+          var badges = document.querySelectorAll('.badge-apple');
+          badges.forEach(function(b) { b.textContent = '未使用'; b.className = 'badge-apple badge-apple-unused'; });
+        } else {
+          showToast('❌ ' + (data.error || '重置失败'), 'error');
+        }
+      } catch(e) { showToast('❌ 请求失败', 'error'); }
+      if (btn) btn.disabled = false;
+    }
+  </script>
+</body>
+</html>

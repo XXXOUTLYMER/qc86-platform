@@ -1,0 +1,26 @@
+services:
+  qc86-platform:
+    build: .
+    container_name: qc86-platform
+    restart: unless-stopped
+    init: true
+    # fnOS 文件管理器中直接编辑同目录的 fnos.env 即可配置密钥。
+    env_file:
+      - ./fnos.env
+    ports:
+      # 初次内网测试可保留 3000；正式对外时只让反向代理访问容器。
+      - "3000:3000"
+    volumes:
+      # 持久化 SQLite 数据库
+      - ./data:/app/data
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

@@ -1,0 +1,2800 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title><%= typeof siteName !== 'undefined' && siteName ? siteName : '卡密接码' %></title>
+  <style>
+    /* ======================================== */
+    /* ===== RESET & BASE ===== */
+    /* ======================================== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', sans-serif;
+      --page-x: 50%;
+      --page-y: 22%;
+      --accent: #ce4f10;
+      --accent-deep: #a93608;
+      --accent-soft: rgba(206, 79, 16, 0.10);
+      background-color: #090a0c;
+      background-image:
+        radial-gradient(ellipse 68% 48% at 5% -8%, rgba(177, 57, 8, 0.10), transparent 72%),
+        linear-gradient(145deg, #0d0e11 0%, #07080a 52%, #0a0b0d 100%);
+      min-height: 100vh;
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ======================================== */
+    /* ===== LOADING SCREEN ===== */
+    /* ======================================== */
+    .loading-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 9999;
+      background: #08080c;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      transition: opacity .8s ease, visibility .8s ease, backdrop-filter .8s ease;
+    }
+    .loading-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    .loading-overlay.is-submitting {
+      transition: opacity .22s ease, visibility .22s ease;
+    }
+    .loading-overlay.is-arriving {
+      background: #19dc68;
+      transition: opacity .62s cubic-bezier(.22,1,.36,1), visibility .62s ease;
+    }
+
+    /* Icon container */
+    .loader-icon {
+      position: relative;
+      width: 52px;
+      height: 52px;
+    }
+    .loader-icon svg {
+      width: 52px;
+      height: 52px;
+      color: #fb923c;
+      animation: loaderBreathe 2.4s ease-in-out infinite;
+    }
+    @keyframes loaderBreathe {
+      0%, 100% { opacity: 0.5; transform: scale(0.92); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+
+    /* Icon glow ring */
+    .loader-icon::before {
+      content: '';
+      position: absolute;
+      top: -6px; left: -6px;
+      right: -6px; bottom: -6px;
+      border-radius: 18px;
+      border: 1.5px solid rgba(251, 146, 60, 0.08);
+      animation: loaderRing 2.4s ease-in-out infinite;
+    }
+    @keyframes loaderRing {
+      0%, 100% { transform: scale(0.88); opacity: 0.3; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+    }
+
+    /* Shimmer dot under icon */
+    .loader-glow {
+      width: 20px;
+      height: 20px;
+      background: radial-gradient(circle, rgba(251,146,60,0.2) 0%, transparent 70%);
+      border-radius: 50%;
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: loaderGlow 2.4s ease-in-out infinite;
+    }
+    @keyframes loaderGlow {
+      0%, 100% { opacity: 0.2; transform: translateX(-50%) scale(0.8); }
+      50% { opacity: 0.6; transform: translateX(-50%) scale(1.2); }
+    }
+
+    /* Thin loading bar */
+    .loader-bar {
+      width: 100px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+    .loader-bar-fill {
+      position: absolute;
+      top: 0; left: -40%;
+      width: 40%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, #fb923c, transparent);
+      border-radius: 2px;
+      animation: barSweep 1.8s ease-in-out infinite;
+    }
+    @keyframes barSweep {
+      0% { left: -40%; }
+      50% { left: 100%; }
+      100% { left: 140%; }
+    }
+
+    /* Minimal text */
+    .loader-text {
+      font-size: 12px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.2);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    /* ===== BACKGROUND EFFECTS ===== */
+    /* ======================================== */
+    .bg-orb {
+      display: none;
+    }
+    .bg-orb:nth-child(1) {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, #fb923c 0%, #ea580c 50%, transparent 70%);
+      top: -20%; left: -15%;
+      animation-delay: 0s;
+    }
+    .bg-orb:nth-child(2) {
+      width: 450px; height: 450px;
+      background: radial-gradient(circle, #f59e0b 0%, #d97706 50%, transparent 70%);
+      bottom: -20%; right: -15%;
+      animation-delay: -8s;
+      opacity: 0.18;
+    }
+    .bg-orb:nth-child(3) {
+      width: 350px; height: 350px;
+      background: radial-gradient(circle, #f97316 0%, #9a3412 50%, transparent 70%);
+      top: 45%; left: 55%;
+      animation-delay: -16s;
+      opacity: 0.15;
+    }
+    @keyframes orbFloat {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      25% { transform: translate(40px, -50px) scale(1.06); }
+      50% { transform: translate(-25px, 30px) scale(0.94); }
+      75% { transform: translate(50px, 35px) scale(1.02); }
+    }
+
+    /* Warm glowing grid */
+    .bg-grid {
+      display: none;
+    }
+
+    /* Ambient glow pulse */
+    .bg-glow {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background:
+        radial-gradient(ellipse 42% 34% at var(--page-x) var(--page-y), rgba(255,255,255,0.018) 0%, transparent 72%);
+      pointer-events: none;
+      z-index: 0;
+      animation: none;
+      transition: background-position .25s ease-out;
+    }
+    @keyframes glowPulse {
+      0% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    /* Telephone doodle field used only on the card-entry screen. */
+    .phone-pattern {
+      --pointer-x: 50%;
+      --pointer-y: 50%;
+      --touch-pulse: 0;
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0.92;
+      isolation: isolate;
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.88), #000 18%, #000 82%, rgba(0,0,0,0.78));
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.88), #000 18%, #000 82%, rgba(0,0,0,0.78));
+    }
+    .phone-pattern::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(circle 220px at var(--pointer-x) var(--pointer-y), rgba(40,229,111,calc(0.055 + var(--touch-pulse) * 0.055)), transparent 72%),
+        linear-gradient(145deg, rgba(30,121,63,0.025), transparent 42%, rgba(40,229,111,0.025));
+      transition: background-position .12s ease-out;
+    }
+    .phone-doodle {
+      --react-x: 0px;
+      --react-y: 0px;
+      --doodle-scale: 1;
+      --doodle-glow: 0px;
+      position: absolute;
+      left: var(--x);
+      top: var(--y);
+      z-index: 1;
+      width: var(--size);
+      height: var(--size);
+      color: rgba(74, 236, 132, 0.9);
+      opacity: var(--doodle-opacity, var(--base-opacity));
+      transform:
+        translate(calc(-50% + var(--react-x)), calc(-50% + var(--react-y)))
+        rotate(var(--rotate))
+        scale(var(--doodle-scale));
+      filter: drop-shadow(0 0 var(--doodle-glow) rgba(52, 239, 121, 0.48));
+      transition: opacity .2s ease, color .2s ease, filter .22s ease, transform .24s cubic-bezier(.16,1,.3,1);
+      will-change: transform, opacity;
+    }
+    .phone-doodle svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      stroke: currentColor;
+      animation: phoneDoodleDrift var(--duration) ease-in-out var(--delay) infinite alternate;
+    }
+    .phone-doodle.is-near {
+      color: rgba(113, 255, 165, 0.96);
+    }
+    @keyframes phoneDoodleDrift {
+      from { transform: translate3d(0, -1px, 0); }
+      to { transform: translate3d(0, 1.5px, 0); }
+    }
+
+    @media (max-width: 600px) {
+      .phone-pattern {
+        opacity: 0.74;
+        -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.78), #000 16%, #000 84%, rgba(0,0,0,0.72));
+        mask-image: linear-gradient(to bottom, rgba(0,0,0,0.78), #000 16%, #000 84%, rgba(0,0,0,0.72));
+      }
+      .phone-pattern::before {
+        background:
+          radial-gradient(circle 165px at var(--pointer-x) var(--pointer-y), rgba(40,229,111,calc(0.055 + var(--touch-pulse) * 0.065)), transparent 72%),
+          linear-gradient(145deg, rgba(30,121,63,0.018), transparent 42%, rgba(40,229,111,0.018));
+      }
+      .phone-doodle {
+        transition: opacity .16s ease, color .16s ease, transform .18s cubic-bezier(.16,1,.3,1);
+        will-change: auto;
+      }
+      .phone-doodle svg {
+        animation: phoneDoodleDrift var(--duration) ease-in-out var(--delay) infinite alternate;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .phone-doodle,
+      .phone-doodle svg { animation: none; transition: none; }
+    }
+
+    /* ======================================== */
+    /* ===== MAIN GLASS CONTAINER ===== */
+    /* ======================================== */
+    .glass {
+      --glass-x: 50%;
+      --glass-y: 0%;
+      position: relative;
+      z-index: 1;
+      width: 560px;
+      max-width: 100%;
+      background: linear-gradient(145deg, rgba(18, 19, 23, 0.76) 0%, rgba(10, 11, 14, 0.78) 52%, rgba(6, 7, 9, 0.84) 100%);
+      backdrop-filter: blur(18px) saturate(1.10);
+      -webkit-backdrop-filter: blur(18px) saturate(1.10);
+      border: 1px solid rgba(255, 255, 255, 0.075);
+      border-radius: 24px;
+      box-shadow:
+        0 36px 96px rgba(0, 0, 0, 0.50),
+        0 10px 30px rgba(0, 0, 0, 0.22),
+        0 1px 0 rgba(255, 255, 255, 0.085) inset,
+        0 -1px 0 rgba(255, 255, 255, 0.025) inset;
+      padding: 32px;
+      overflow: hidden;
+      isolation: isolate;
+      transition: transform .4s cubic-bezier(.16,1,.3,1), border-color .35s ease, box-shadow .35s ease;
+    }
+    .glass::before {
+      content: '';
+      position: absolute;
+      inset: 1px;
+      border-radius: 23px;
+      background:
+        linear-gradient(100deg, transparent 10%, rgba(255,255,255,0.075) 31%, rgba(255,255,255,0.018) 58%, transparent 88%) top / 100% 1px no-repeat;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .glass::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      background: radial-gradient(circle 210px at var(--glass-x) var(--glass-y), rgba(206,79,16,0.032), transparent 70%);
+      opacity: 0.55;
+      pointer-events: none;
+      z-index: 1;
+      transition: opacity .3s ease;
+    }
+    .glass > * {
+      position: relative;
+      z-index: 2;
+    }
+    .glass:focus-within {
+      border-color: rgba(206, 79, 16, 0.28);
+      box-shadow:
+        0 38px 100px rgba(0,0,0,0.52),
+        0 12px 34px rgba(0,0,0,0.22),
+        0 1px 0 rgba(255,255,255,0.09) inset,
+        0 0 0 1px rgba(206,79,16,0.035);
+    }
+
+    /* ======================================== */
+    /* ===== BRAND / HEADER ===== */
+    /* ======================================== */
+    .brand {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .brand-icon {
+      width: 56px; height: 56px;
+      background: linear-gradient(145deg, #df631d 0%, #c8490d 54%, #983006 100%);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 14px;
+      box-shadow:
+        0 10px 28px rgba(148, 43, 5, 0.24),
+        0 1px 0 rgba(255,255,255,0.24) inset,
+        0 -1px 0 rgba(114,35,5,0.22) inset;
+      transition: transform .4s cubic-bezier(.16,1,.3,1), box-shadow .4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .brand-icon::after {
+      content: '';
+      position: absolute;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: radial-gradient(circle at 28% 20%, rgba(255,255,255,0.24) 0%, transparent 44%);
+      pointer-events: none;
+    }
+    .brand-icon svg { width: 28px; height: 28px; color: #fff; position: relative; z-index: 1; }
+    .brand-icon:hover {
+      transform: scale(1.05) rotate(-2deg);
+      box-shadow: 0 12px 34px rgba(166, 48, 6, 0.30);
+    }
+    .brand h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: 0;
+      margin-bottom: 0;
+    }
+    .brand h1.sms-wordmark {
+      position: relative;
+      display: inline-block;
+      font-family: 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 800;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      -webkit-text-stroke: 1.2px rgba(69, 242, 132, 0.94);
+      background: linear-gradient(#28e56f, #28e56f) 0 100% / 100% 0% no-repeat;
+      -webkit-background-clip: text;
+      background-clip: text;
+      text-shadow: 0 0 18px rgba(40, 229, 111, 0.10);
+      cursor: default;
+      transition: transform .32s cubic-bezier(.16,1,.3,1), text-shadow .32s ease, background-size .46s cubic-bezier(.16,1,.3,1);
+    }
+    .brand:hover h1.sms-wordmark,
+    .brand h1.sms-wordmark:active {
+      transform: translateY(-2px);
+      background-size: 100% 100%;
+      text-shadow: 0 0 24px rgba(40, 229, 111, 0.20);
+    }
+    .brand h1 .accent {
+      background: linear-gradient(135deg, #dc5c17, #b53a08);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    /* ======================================== */
+    /* ===== ERROR / TOAST ===== */
+    /* ======================================== */
+    .error-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.18);
+      color: #fca5a5;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      margin-bottom: 18px;
+      text-align: center;
+      backdrop-filter: blur(10px);
+    }
+
+    /* ======================================== */
+    /* ===== INFO BARS ===== */
+    /* ======================================== */
+    .info-bar {
+      background: rgba(251, 146, 60, 0.06);
+      border: 1px solid rgba(251, 146, 60, 0.12);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+    }
+    .info-bar .label { font-size: 11px; color: rgba(251,146,60,0.5); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .info-bar .num { font-family: 'SF Mono', 'SF Pro Display', monospace; font-size: 16px; color: #fb923c; font-weight: 600; letter-spacing: 0.5px; }
+    .info-bar .hint { font-size: 11px; color: rgba(251,146,60,0.4); margin-top: 4px; }
+
+    .card-info-bar {
+      background: rgba(251, 146, 60, 0.05);
+      border: 1px solid rgba(251, 146, 60, 0.1);
+      border-radius: 12px;
+      padding: 10px 16px;
+      margin-bottom: 18px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.65);
+      display: none;
+    }
+    .card-info-bar .highlight { color: #fb923c; font-weight: 500; }
+    .card-info-bar .test-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 8px;
+      background: rgba(251,146,60,0.12);
+      color: #fb923c;
+      border-radius: 12px;
+      font-size: 10px; font-weight: 600;
+      margin-left: 4px;
+    }
+
+    .project-badge {
+      background: rgba(251, 146, 60, 0.05);
+      border: 1px solid rgba(251, 146, 60, 0.1);
+      border-radius: 12px;
+      padding: 10px 16px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.65);
+      text-align: center;
+    }
+    .project-badge strong { color: #fb923c; }
+    .project-badge .code { font-family: 'SF Mono', 'SF Pro Display', monospace; font-size: 12px; color: rgba(255,255,255,0.4); }
+    .project-badge .test-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 8px;
+      background: rgba(251,146,60,0.12);
+      color: #fb923c;
+      border-radius: 12px;
+      font-size: 10px; font-weight: 600;
+      margin-left: 4px;
+    }
+
+    /* ======================================== */
+    /* ===== ATTEMPTS COUNTER ===== */
+    /* ======================================== */
+    .attempts-counter {
+      text-align: center;
+      font-size: 13px;
+      color: rgba(126,255,170,0.62);
+      margin-bottom: 14px;
+    }
+    .attempts-counter strong { color: #65f49a; font-weight: 500; }
+    .attempts-counter .att-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      background: rgba(40,229,111,0.13);
+      color: #41ed82;
+      border-radius: 6px;
+      padding: 0 6px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    /* ======================================== */
+    /* ===== FORM ELEMENTS ===== */
+    /* ======================================== */
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      color: rgba(255,255,255,0.48);
+      margin-bottom: 6px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      transition: color .2s ease;
+    }
+    .form-group:focus-within label {
+      color: rgba(225,108,45,0.90);
+    }
+    .form-group input {
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(3, 4, 7, 0.25);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 14px;
+      font-size: 15px;
+      color: #fff;
+      outline: none;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.035) inset;
+      transition: border-color .25s ease, background .25s ease, box-shadow .25s ease, transform .25s ease;
+      font-family: 'SF Mono', 'SF Pro Display', monospace;
+      letter-spacing: 1px;
+    }
+    .form-group input::placeholder { color: rgba(255,255,255,0.23); letter-spacing: 0.5px; }
+    .form-group input:focus {
+      border-color: rgba(206, 79, 16, 0.68);
+      background: rgba(5, 5, 8, 0.34);
+      box-shadow:
+        0 0 0 3px rgba(206, 79, 16, 0.085),
+        0 8px 26px rgba(0,0,0,0.16),
+        0 1px 0 rgba(255,255,255,0.06) inset;
+    }
+
+    /* ======================================== */
+    /* ===== BUTTONS ===== */
+    /* ======================================== */
+    .btn {
+      position: relative;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .25s cubic-bezier(.16,1,.3,1);
+      font-family: inherit;
+      letter-spacing: 0.2px;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #d85816 0%, #ad3507 100%);
+      color: #fff;
+      border: 1px solid rgba(239,131,67,0.22);
+      box-shadow:
+        0 9px 24px rgba(132, 37, 4, 0.23),
+        0 1px 0 rgba(255,255,255,0.17) inset,
+        0 -1px 0 rgba(123,41,7,0.16) inset;
+    }
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: -120%;
+      left: -28%;
+      width: 24%;
+      height: 340%;
+      display: none;
+      transform: rotate(18deg);
+      transition: left .65s cubic-bezier(.16,1,.3,1);
+      pointer-events: none;
+    }
+    .btn-primary::after {
+      content: '';
+      display: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.38);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    .btn-primary:hover:not(:disabled) {
+      box-shadow:
+        0 12px 30px rgba(150,43,5,0.30),
+        0 1px 0 rgba(255,255,255,0.20) inset;
+      transform: translateY(-2px);
+    }
+    .btn-primary:hover:not(:disabled)::before { left: 112%; }
+    .btn-primary.is-loading::after { display: block; }
+    .btn-primary.is-loading svg { display: none; }
+    .btn-primary.is-loading { opacity: 0.88; }
+    }
+
+    .btn-ghost {
+      background: rgba(251, 146, 60, 0.06);
+      color: rgba(255, 255, 255, 0.65);
+      border: 1px solid rgba(251, 146, 60, 0.1);
+    }
+    .btn-ghost:hover:not(:disabled) {
+      background: rgba(251, 146, 60, 0.1);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.03);
+      color: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 13px;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    /* ======================================== */
+    /* ===== RESULT BOXES ===== */
+    /* ======================================== */
+    .result-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      transition: border-color .3s ease, background .3s ease, box-shadow .3s ease;
+    }
+    .result-box:hover {
+      border-color: rgba(251, 146, 60, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .result-box .label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .result-box .value {
+      font-size: 20px;
+      font-weight: 600;
+      color: #fff;
+      font-family: 'SF Mono', 'SF Pro Display', monospace;
+      letter-spacing: 0.5px;
+    }
+    .result-box .value.sms-code {
+      font-size: 32px;
+      letter-spacing: 6px;
+      background: linear-gradient(135deg, #8bf5ae, #28e56f);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .result-box .msg-text {
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+      margin-top: 6px;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+    .result-box.success {
+      background: rgba(40, 229, 111, 0.07);
+      border-color: rgba(40, 229, 111, 0.22);
+    }
+
+
+    /* Copy phone button */
+    .copy-btn {
+      position: relative;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(145deg, rgba(74, 244, 137, 0.28), rgba(15, 112, 53, 0.16));
+      border: 1px solid rgba(139, 255, 180, 0.34);
+      border-radius: 8px;
+      backdrop-filter: blur(12px) saturate(1.24);
+      -webkit-backdrop-filter: blur(12px) saturate(1.24);
+      cursor: pointer;
+      transition: transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+      color: rgba(239, 255, 245, 0.94);
+      box-shadow:
+        0 7px 20px rgba(0, 92, 35, 0.20),
+        0 1px 0 rgba(220, 255, 232, 0.24) inset,
+        0 -1px 0 rgba(0, 61, 23, 0.18) inset;
+      flex-shrink: 0;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    .copy-btn::before {
+      content: '';
+      position: absolute;
+      inset: 1px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, rgba(232,255,240,0.15), transparent 48%);
+      pointer-events: none;
+    }
+    .copy-btn:hover {
+      background: linear-gradient(145deg, rgba(85, 250, 148, 0.38), rgba(17, 139, 64, 0.22));
+      border-color: rgba(166, 255, 197, 0.50);
+      color: #fff;
+      box-shadow:
+        0 9px 24px rgba(0, 118, 45, 0.26),
+        0 0 0 3px rgba(40,229,111,0.07),
+        0 1px 0 rgba(235,255,242,0.30) inset;
+    }
+    .copy-btn:active {
+      transform: scale(0.92);
+    }
+    .copy-btn.copied {
+      background: linear-gradient(145deg, rgba(73, 255, 142, 0.48), rgba(20, 178, 76, 0.28));
+      border-color: rgba(181, 255, 207, 0.62);
+      color: #fff;
+      box-shadow: 0 8px 24px rgba(18, 198, 84, 0.24), 0 0 0 3px rgba(40,229,111,0.09);
+    }
+    .copy-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+    }
+    .phone-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .phone-row .value {
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* ======================================== */
+    /* ===== SMS WAITING ===== */
+    /* ======================================== */
+    .sms-waiting {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed rgba(251, 146, 60, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(251,146,60,0.08);
+      border-top-color: #fb923c;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .spinner-brand {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(251,146,60,0.05);
+      border-top: 2px solid #fb923c;
+      border-right: 2px solid #f59e0b;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .waiting-msg {
+      font-size: 14px;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 4px;
+    }
+    .sms-hint {
+      font-size: 12px;
+      color: rgba(255,255,255,0.2);
+    }
+
+    /* ======================================== */
+    /* ===== COUNTDOWN ===== */
+    /* ======================================== */
+    .countdown-area {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .countdown-text {
+      font-size: 13px;
+      color: rgba(255,255,255,0.4);
+    }
+    .countdown-text .timer {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .countdown-number {
+      font-weight: 600;
+      font-size: 17px;
+      color: #fb923c;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Countdown ring */
+    .countdown-ring {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .countdown-ring svg { transform: rotate(-90deg); }
+    .countdown-ring .bg-ring {
+      fill: none;
+      stroke: rgba(251,146,60,0.06);
+      stroke-width: 3;
+    }
+    .countdown-ring .progress-ring {
+      fill: none;
+      stroke: url(#ringGrad);
+      stroke-width: 3;
+      stroke-linecap: round;
+      transition: stroke-dashoffset .5s ease;
+    }
+    .countdown-ring .ring-label {
+      position: absolute;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fb923c;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    /* ======================================== */
+    /* ===== SUCCESS MESSAGE ===== */
+    /* ======================================== */
+    .success-msg {
+      text-align: center;
+      font-size: 14px;
+      color: #fb923c;
+      padding: 12px;
+      background: rgba(251, 146, 60, 0.06);
+      border: 1px solid rgba(251, 146, 60, 0.12);
+      border-radius: 12px;
+      margin-bottom: 14px;
+    }
+
+    .status-text {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.2);
+    }
+
+    /* ======================================== */
+    /* ===== FADE ANIMATIONS ===== */
+    /* ======================================== */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeUp .5s cubic-bezier(.16,1,.3,1) both; }
+    .fade-in-d1 { animation-delay: 0.05s; }
+    .fade-in-d2 { animation-delay: 0.1s; }
+    .fade-in-d3 { animation-delay: 0.15s; }
+
+    /* Waiting/result pages are server-rendered and must be visible immediately
+       after a refresh so the current phone number is never hidden. */
+    body.step-waiting .fade-in {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    body.step-waiting .loading-overlay:not(.is-submitting):not(.is-arriving) {
+      display: none !important;
+    }
+    body.step-waiting .loading-overlay.is-submitting,
+    body.step-waiting .loading-overlay.is-arriving {
+      display: flex !important;
+    }
+    body.step-waiting.transition-arrival .glass {
+      animation: transitionArrivalContent .72s cubic-bezier(.16,1,.3,1) .14s both !important;
+    }
+    @keyframes transitionArrivalContent {
+      from { opacity: 0.72; transform: translateY(10px) scale(0.992); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ======================================== */
+    /* ===== TOAST ===== */
+    /* ======================================== */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 30, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      color: rgba(255,255,255,0.85);
+      padding: 12px 24px;
+      border-radius: 14px;
+      font-size: 13px;
+      z-index: 999;
+      border: 1px solid rgba(251,146,60,0.08);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transition: opacity .3s ease;
+      pointer-events: none;
+    }
+
+    /* ======================================== */
+    /* ===== INTERACTIVE EFFECTS ===== */
+
+    /* Error shake */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 50%, 90% { transform: translateX(-4px); }
+      30%, 70% { transform: translateX(4px); }
+    }
+    .shake { animation: shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+
+    /* Pulse glow for sms */
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(251,146,60,0.3); }
+      50% { box-shadow: 0 0 24px 6px rgba(251,146,60,0.12); }
+    }
+    .pulse-glow { animation: pulseGlow 1.5s ease-in-out 3; }
+
+    /* Ripple */
+    .ripple-effect {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      transform: scale(0);
+      animation: rippleAnim .6s ease-out forwards;
+      pointer-events: none;
+    }
+    @keyframes rippleAnim {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    /* Number transition */
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .num-transition {
+      animation: slideUp .35s cubic-bezier(.16,1,.3,1);
+    }
+
+    /* Checkmark pop */
+    @keyframes checkPop {
+      0% { transform: scale(0); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    .check-anim svg {
+      width: 20px; height: 20px;
+      vertical-align: middle;
+      margin-right: 6px;
+      animation: checkPop .4s cubic-bezier(.36,.07,.19,.97) both;
+    }
+
+    .scroll-target { scroll-margin-top: 20px; }
+
+    /* ======================================== */
+    /* ===== RESPONSIVE ===== */
+    /* ======================================== */
+    @media (max-width: 768px) {
+      body {
+        justify-content: flex-start;
+        padding-top: max(10px, env(safe-area-inset-top));
+        padding-right: max(8px, env(safe-area-inset-right));
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+        padding-left: max(8px, env(safe-area-inset-left));
+      }
+      .glass { width: min(100%, 650px); padding: 26px 24px; border-radius: 22px; }
+      .brand-icon { width: 48px; height: 48px; }
+      .brand-icon svg { width: 24px; height: 24px; }
+      .brand { margin-bottom: 22px; }
+      .brand h1 { font-size: 20px; }
+      .result-box .value.sms-code { font-size: 28px; letter-spacing: 4px; }
+    }
+    @media (max-width: 480px) {
+      body {
+        padding-top: max(54px, calc(env(safe-area-inset-top) + 7svh));
+        padding-right: max(8px, env(safe-area-inset-right));
+        padding-left: max(8px, env(safe-area-inset-left));
+        background-image:
+          radial-gradient(ellipse 108% 43% at 12% -8%, rgba(177,57,8,0.11), transparent 74%),
+          linear-gradient(155deg, #0d0e11 0%, #07080a 54%, #0a0b0d 100%);
+      }
+      .glass {
+        width: 100%;
+        max-width: none;
+        padding: 22px 14px 20px;
+        border-radius: 18px;
+        background: linear-gradient(145deg, rgba(18,19,23,0.78) 0%, rgba(10,11,14,0.80) 52%, rgba(6,7,9,0.86) 100%);
+        border-color: rgba(255,255,255,0.075);
+        box-shadow:
+          0 26px 70px rgba(0,0,0,0.48),
+          0 8px 24px rgba(0,0,0,0.18),
+          0 1px 0 rgba(255,255,255,0.16) inset,
+          0 -1px 0 rgba(255,255,255,0.025) inset;
+      }
+      .glass::before { border-radius: 17px; }
+      .brand-icon { width: 48px; height: 48px; margin-bottom: 12px; border-radius: 14px; }
+      .brand-icon svg { width: 23px; height: 23px; }
+      .brand { margin-bottom: 20px; }
+      .brand h1 { font-size: 20px; margin-bottom: 5px; }
+      .form-group { margin-bottom: 14px; }
+      .form-group label { margin-bottom: 7px; }
+      .form-group input { min-height: 48px; padding: 12px 14px; font-size: 16px; border-radius: 13px; }
+      .btn { min-height: 48px; padding: 12px 16px; font-size: 14px; border-radius: 13px; }
+      .result-box { padding: 14px 16px; }
+      .result-box .value { font-size: 18px; }
+      .result-box .value.sms-code { font-size: 22px; letter-spacing: 3px; }
+      .error-box { font-size: 12px; padding: 8px 12px; }
+      .project-badge { font-size: 12px; padding: 8px 12px; }
+      .bg-grid { background-size: 42px 42px; opacity: 0.45; }
+    }
+    @media (max-width: 380px) {
+      body { padding-left: max(5px, env(safe-area-inset-left)); padding-right: max(5px, env(safe-area-inset-right)); }
+      .glass { padding: 20px 12px 18px; border-radius: 17px; }
+      .glass::before { border-radius: 16px; }
+      .brand { margin-bottom: 18px; }
+      .brand h1 { font-size: 19px; }
+      .result-box .value.sms-code { font-size: 18px; }
+      .form-group input { font-size: 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    /* ===== GREEN SIGNAL REFINEMENT ===== */
+    /* A restrained green signal on deep black, with color reserved for action and state. */
+    body {
+      --accent: #28e56f;
+      --accent-deep: #12b956;
+      --accent-soft: rgba(40, 229, 111, 0.10);
+      background-color: #020403;
+      background-image:
+        radial-gradient(ellipse 82% 48% at 50% -16%, rgba(40,229,111,0.10), transparent 70%),
+        linear-gradient(155deg, #07110b 0%, #020403 45%, #050906 100%);
+    }
+    .loading-overlay {
+      background: #020403;
+      isolation: isolate;
+      overflow: hidden;
+    }
+    .loader-stage {
+      position: relative;
+      width: 76px;
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      isolation: isolate;
+    }
+    .loading-fill {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 160vmax;
+      height: 160vmax;
+      margin: -80vmax 0 0 -80vmax;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #34f17a 0%, #19d968 48%, #0dbb51 100%);
+      transform: scale(0);
+      animation: loadingFillScreen 1.05s cubic-bezier(.72,0,.22,1) .16s forwards;
+      z-index: 0;
+      will-change: transform;
+    }
+    .loading-overlay.is-arriving .loading-fill {
+      animation: none;
+      transform: scale(1);
+    }
+    @keyframes loadingFillScreen {
+      0% { transform: scale(0); }
+      28% { transform: scale(0.042); }
+      100% { transform: scale(1); }
+    }
+    .loader-icon {
+      position: relative;
+      z-index: 2;
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #050806;
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 16px 50px rgba(0,0,0,0.34), 0 1px 0 rgba(255,255,255,0.12) inset;
+    }
+    .loader-icon svg { width: 32px; height: 32px; color: #2bea73; }
+    .loader-icon::before {
+      inset: -7px;
+      border-radius: 50%;
+      border-color: rgba(40,229,111,0.22);
+    }
+    .loader-glow { display: none; }
+    .loader-bar { position: relative; z-index: 2; background: rgba(0,0,0,0.12); }
+    .loader-bar-fill { background: linear-gradient(90deg, transparent, #071009, transparent); }
+    .loader-text { position: relative; z-index: 2; color: rgba(1,12,5,0.56); font-weight: 600; }
+
+    .bg-glow {
+      background: radial-gradient(ellipse 42% 34% at var(--page-x) var(--page-y), rgba(40,229,111,0.032) 0%, transparent 72%);
+    }
+    .bg-orb { display: none; }
+    .bg-grid { opacity: 0.18; }
+
+    .glass {
+      background: linear-gradient(145deg, rgba(19,27,22,0.88) 0%, rgba(10,15,12,0.92) 52%, rgba(5,8,6,0.95) 100%);
+      border-color: rgba(142,255,181,0.13);
+      box-shadow:
+        0 36px 96px rgba(0,0,0,0.62),
+        0 10px 30px rgba(0,0,0,0.32),
+        0 1px 0 rgba(200,255,218,0.11) inset,
+        0 -1px 0 rgba(40,229,111,0.025) inset;
+    }
+    .glass::before {
+      background: linear-gradient(100deg, transparent 10%, rgba(193,255,214,0.11) 31%, rgba(40,229,111,0.018) 58%, transparent 88%) top / 100% 1px no-repeat;
+    }
+    .glass::after {
+      background: radial-gradient(circle 210px at var(--glass-x) var(--glass-y), rgba(40,229,111,0.035), transparent 70%);
+    }
+    .glass:focus-within {
+      border-color: rgba(40,229,111,0.40);
+      box-shadow:
+        0 38px 100px rgba(0,0,0,0.66),
+        0 12px 34px rgba(0,0,0,0.32),
+        0 1px 0 rgba(211,255,226,0.13) inset,
+        0 0 0 1px rgba(40,229,111,0.08);
+    }
+
+    .brand-icon {
+      background: linear-gradient(145deg, #31ea75 0%, #1bd663 56%, #0fac4b 100%);
+      border-color: rgba(180,255,207,0.25);
+      box-shadow:
+        0 12px 32px rgba(13,164,69,0.20),
+        0 1px 0 rgba(225,255,235,0.30) inset,
+        0 -1px 0 rgba(0,67,25,0.28) inset;
+    }
+    .brand-icon svg { color: #031008; }
+    .brand-icon:hover { box-shadow: 0 15px 38px rgba(13,164,69,0.28); }
+    .brand h1 .accent { background: none; color: #28e56f; -webkit-text-fill-color: #28e56f; }
+
+    .info-bar,
+    .card-info-bar,
+    .project-badge,
+    .success-msg {
+      background: rgba(255,255,255,0.045);
+      border-color: rgba(255,255,255,0.10);
+    }
+    .info-bar .label,
+    .info-bar .num,
+    .info-bar .hint,
+    .card-info-bar .highlight,
+    .card-info-bar .test-badge,
+    .project-badge strong,
+    .project-badge .test-badge,
+    .countdown-number,
+    .countdown-ring .ring-label,
+    .success-msg { color: #28e56f; }
+    .card-info-bar .test-badge,
+    .project-badge .test-badge,
+    .attempts-counter .att-num {
+      background: rgba(40,229,111,0.12);
+    }
+    .card-info-bar .test-badge,
+    .project-badge .test-badge { border-color: rgba(40,229,111,0.18); }
+
+    .form-group:focus-within label { color: #28e56f; }
+    .form-group input:focus {
+      border-color: rgba(40,229,111,0.68);
+      box-shadow:
+        0 0 0 3px rgba(40,229,111,0.10),
+        0 8px 26px rgba(0,0,0,0.22),
+        0 1px 0 rgba(255,255,255,0.08) inset;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #32ec77 0%, #20d865 100%);
+      color: #041108;
+      border-color: rgba(181,255,207,0.48);
+      box-shadow:
+        0 10px 28px rgba(16,178,75,0.20),
+        0 1px 0 rgba(225,255,235,0.45) inset,
+        0 -1px 0 rgba(0,74,27,0.14) inset;
+    }
+    .btn-primary::before { display: none; }
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(180deg, #40f184 0%, #28df6d 100%);
+      transform: translateY(-1px);
+      box-shadow:
+        0 14px 34px rgba(16,178,75,0.28),
+        0 1px 0 rgba(235,255,242,0.50) inset;
+    }
+    .btn-ghost {
+      background: rgba(255,255,255,0.055);
+      border-color: rgba(255,255,255,0.12);
+    }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.10); }
+
+    #getNewPhoneBtn {
+      background: linear-gradient(180deg, #32ec77 0%, #20d865 100%);
+      color: #041108;
+      border: 1px solid rgba(181,255,207,0.42);
+      box-shadow:
+        0 10px 26px rgba(16,178,75,0.18),
+        0 1px 0 rgba(225,255,235,0.40) inset;
+    }
+    #getNewPhoneBtn:hover:not(:disabled) {
+      background: linear-gradient(180deg, #40f184 0%, #28df6d 100%);
+      color: #020a05;
+      border-color: rgba(198,255,218,0.56);
+      box-shadow:
+        0 14px 32px rgba(16,178,75,0.26),
+        0 1px 0 rgba(235,255,242,0.48) inset;
+    }
+    #getNewPhoneBtn:disabled {
+      opacity: 1;
+      background: linear-gradient(180deg, #446a50 0%, #31523d 100%);
+      color: rgba(225,242,231,0.60);
+      border-color: rgba(132,177,147,0.22);
+      box-shadow: 0 7px 18px rgba(0,0,0,0.16), 0 1px 0 rgba(255,255,255,0.05) inset;
+      filter: saturate(0.48);
+    }
+
+    .result-box,
+    .countdown-ring .bg-ring { stroke: rgba(255,255,255,0.10); }
+    .result-box { background: rgba(255,255,255,0.045); border-color: rgba(255,255,255,0.10); }
+    .result-box.success {
+      background: linear-gradient(145deg, rgba(40,229,111,0.10), rgba(12,44,24,0.24));
+      border-color: rgba(40,229,111,0.30);
+      box-shadow:
+        0 14px 34px rgba(5,92,38,0.16),
+        0 1px 0 rgba(190,255,213,0.08) inset;
+    }
+    .result-box.success:hover {
+      background: linear-gradient(145deg, rgba(40,229,111,0.13), rgba(12,44,24,0.28));
+      border-color: rgba(40,229,111,0.38);
+      box-shadow:
+        0 16px 38px rgba(5,92,38,0.20),
+        0 1px 0 rgba(190,255,213,0.10) inset;
+    }
+    .result-box .value.sms-code {
+      background: linear-gradient(135deg, #8bf5ae 0%, #28e56f 58%, #12b956 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .result-box.success .label { color: rgba(143,245,178,0.58); }
+    .result-box.success .msg-text { color: rgba(211,243,222,0.58); }
+    .spinner,
+    .spinner-brand { border-color: rgba(255,255,255,0.12); border-top-color: #28e56f; }
+    .spinner-brand { border-right-color: #12b956; }
+    .countdown-ring .progress-ring { stroke: #28e56f; }
+    .toast { border-color: rgba(255,255,255,0.10); }
+    .pulse-glow { animation-name: pulseGlowGreen; }
+    @keyframes pulseGlowGreen {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(40,229,111,0.24); }
+      50% { box-shadow: 0 0 24px 5px rgba(40,229,111,0.10); }
+    }
+    svg[stroke="#fb923c"] { stroke: #28e56f !important; }
+    #ringGrad stop:first-child { stop-color: #28e56f; }
+    #ringGrad stop:last-child { stop-color: #12b956; }
+
+    .emoji-rail {
+      position: fixed;
+      left: 50%;
+      width: min(680px, calc(100vw - 32px));
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 1;
+    }
+    .emoji-rail.top { top: max(20px, env(safe-area-inset-top)); }
+    .emoji-rail.bottom { bottom: max(18px, env(safe-area-inset-bottom)); }
+    .emoji-rail.top .emoji-chip:nth-child(2) { display: none; }
+    .emoji-chip {
+      --chip-x: 0px;
+      --chip-y: 0px;
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(126,255,170,0.10);
+      border-radius: 12px;
+      background: rgba(8,17,11,0.50);
+      box-shadow: 0 8px 26px rgba(0,0,0,0.20), 0 1px 0 rgba(255,255,255,0.05) inset;
+      font-size: 17px;
+      opacity: 0.42;
+      filter: grayscale(0.62) saturate(0.72);
+      pointer-events: auto;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      animation: emojiFloat 5.5s ease-in-out infinite;
+      transition: opacity .24s ease, filter .24s ease, border-color .24s ease, background .24s ease, box-shadow .24s ease;
+    }
+    .emoji-chip:nth-child(2) { animation-delay: -1.8s; }
+    .emoji-chip:nth-child(3) { animation-delay: -3.6s; }
+    @keyframes emojiFloat {
+      0%, 100% { transform: translate3d(var(--chip-x), var(--chip-y), 0); }
+      50% { transform: translate3d(var(--chip-x), calc(var(--chip-y) - 5px), 0); }
+    }
+    .emoji-chip.is-near,
+    .emoji-chip:hover,
+    .emoji-chip:focus-visible {
+      opacity: 0.92;
+      filter: grayscale(0) saturate(1.08);
+      border-color: rgba(86,255,146,0.28);
+      background: rgba(15,38,23,0.76);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.25), 0 0 20px rgba(40,229,111,0.08), 0 1px 0 rgba(225,255,235,0.09) inset;
+      outline: none;
+    }
+    .emoji-chip.is-active {
+      animation: emojiTap .52s cubic-bezier(.2,.8,.2,1) both;
+      opacity: 1;
+      filter: grayscale(0) saturate(1.16);
+    }
+    @keyframes emojiTap {
+      0% { transform: translate3d(var(--chip-x), var(--chip-y), 0) scale(1); }
+      35% { transform: translate3d(var(--chip-x), calc(var(--chip-y) - 5px), 0) scale(.86) rotate(-5deg); }
+      72% { transform: translate3d(var(--chip-x), calc(var(--chip-y) - 8px), 0) scale(1.16) rotate(4deg); }
+      100% { transform: translate3d(var(--chip-x), var(--chip-y), 0) scale(1); }
+    }
+    .emoji-spark {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 4px;
+      height: 4px;
+      margin: -2px;
+      border-radius: 50%;
+      background: #4df58a;
+      box-shadow: 0 0 8px rgba(77,245,138,.52);
+      pointer-events: none;
+      animation: emojiSpark .58s ease-out forwards;
+    }
+    @keyframes emojiSpark {
+      from { opacity: .9; transform: translate(0, 0) scale(1); }
+      to { opacity: 0; transform: translate(var(--spark-x), var(--spark-y)) scale(.25); }
+    }
+
+    #successParticles {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 8000;
+    }
+
+    @media (max-width: 768px) {
+      .emoji-rail {
+        position: relative;
+        left: auto;
+        width: min(100%, 650px);
+        transform: none;
+        flex: 0 0 auto;
+        z-index: 11;
+      }
+      .emoji-rail.top { top: auto; margin-bottom: 24px; }
+      .emoji-rail.bottom { bottom: auto; margin-top: 12px; }
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding-top: max(8px, env(safe-area-inset-top));
+        background-image:
+          radial-gradient(ellipse 110% 40% at 50% -12%, rgba(40,229,111,0.09), transparent 72%),
+          linear-gradient(155deg, #07110b 0%, #020403 52%, #050906 100%);
+      }
+      .glass {
+        background: linear-gradient(145deg, rgba(18,27,21,0.90) 0%, rgba(9,15,11,0.94) 52%, rgba(5,8,6,0.97) 100%);
+        border-color: rgba(142,255,181,0.13);
+        box-shadow:
+          0 26px 70px rgba(0,0,0,0.58),
+          0 8px 24px rgba(0,0,0,0.26),
+          0 1px 0 rgba(200,255,218,0.11) inset,
+          0 -1px 0 rgba(40,229,111,0.025) inset;
+      }
+      .emoji-rail { width: 100%; }
+      .emoji-chip { width: 34px; height: 34px; border-radius: 10px; font-size: 15px; opacity: 0.34; }
+      .emoji-rail.top { top: auto; margin-bottom: 24px; }
+      .emoji-rail.bottom { bottom: auto; }
+    }
+
+    @media (max-width: 768px) {
+      .emoji-rail.bottom {
+        position: fixed;
+        left: 50%;
+        bottom: max(10px, env(safe-area-inset-bottom));
+        width: min(680px, calc(100vw - 18px));
+        margin-top: 0;
+        transform: translateX(-50%);
+        z-index: 2;
+        transition: opacity .24s ease, visibility .24s ease, transform .24s ease;
+      }
+      .emoji-rail.bottom.is-obscured {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateX(-50%) translateY(8px);
+      }
+    }
+
+    /* Keep the short card-entry view visually centered on phones. */
+    @media (max-width: 480px) {
+      body.step-enter_card {
+        justify-content: center;
+        padding-top: max(64px, calc(env(safe-area-inset-top) + 52px));
+        padding-bottom: max(64px, calc(env(safe-area-inset-bottom) + 52px));
+      }
+      body.step-enter_card .emoji-rail.top {
+        position: fixed;
+        left: 50%;
+        top: max(10px, env(safe-area-inset-top));
+        width: min(680px, calc(100vw - 18px));
+        margin: 0;
+        transform: translateX(-50%);
+        z-index: 2;
+      }
+      body.step-enter_card .glass {
+        flex: 0 0 auto;
+      }
+    }
+
+    /* ===== PREFIX FILTERING STATUS ===== */
+    .filtering-status {
+      min-height: 235px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 18px 8px 10px;
+      text-align: center;
+    }
+    .filtering-phone {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(87, 255, 151, 0.26);
+      border-radius: 17px;
+      background: rgba(39, 216, 101, 0.09);
+      color: #38ea7c;
+      box-shadow: 0 0 0 8px rgba(39, 216, 101, 0.035);
+      animation: filterBreathe 1.8s ease-in-out infinite;
+    }
+    .filtering-phone svg { width: 25px; height: 25px; }
+    @keyframes filterBreathe {
+      0%, 100% { transform: scale(0.96); box-shadow: 0 0 0 8px rgba(39, 216, 101, 0.03); }
+      50% { transform: scale(1); box-shadow: 0 0 0 17px rgba(39, 216, 101, 0); }
+    }
+    .filtering-status h2 {
+      margin-top: 22px;
+      color: rgba(240, 255, 246, 0.94);
+      font-size: 17px;
+      font-weight: 600;
+    }
+    .filtering-status p {
+      min-height: 20px;
+      margin-top: 8px;
+      color: rgba(220, 244, 228, 0.58);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .filtering-progress {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 106px;
+      margin-top: 18px;
+      padding: 7px 11px;
+      border: 1px solid rgba(87, 255, 151, 0.16);
+      border-radius: 999px;
+      background: rgba(39, 216, 101, 0.07);
+      color: rgba(139, 255, 182, 0.82);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .filtering-back {
+      display: none;
+      width: auto;
+      margin-top: 18px;
+      padding: 9px 13px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body class="step-<%= step %>">
+  <!-- SVG Defs for gradients -->
+  <svg style="position:absolute;width:0;height:0" aria-hidden="true">
+    <defs>
+      <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#ea580c"/>
+        <stop offset="100%" stop-color="#f59e0b"/>
+      </linearGradient>
+      <symbol id="phonePatternIcon" viewBox="0 0 24 24">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <% if (step === 'enter_card') { %>
+  <div class="phone-pattern" id="phonePattern" aria-hidden="true">
+    <% var patternLayout = [
+         [8, 4], [29, 8], [51, 4], [72, 9], [93, 5],
+         [16, 13], [39, 17], [61, 14], [84, 18], [5, 22],
+         [27, 21], [50, 24], [74, 21], [94, 24], [11, 29],
+         [39, 29], [64, 27], [87, 30], [6, 30], [21, 26],
+         [7, 71], [30, 75], [52, 72], [75, 76], [94, 71],
+         [16, 80], [40, 83], [62, 79], [85, 84], [5, 88],
+         [28, 88], [51, 91], [73, 87], [95, 90], [12, 96],
+         [39, 95], [64, 97], [88, 95], [6, 79], [21, 91]
+       ];
+       var patternSizes = [
+         37, 29, 35, 31, 38,
+         28, 36, 30, 34, 27,
+         29, 37, 31, 30, 27,
+         34, 38, 28, 26, 27,
+         37, 29, 35, 31, 38,
+         28, 36, 30, 34, 27,
+         29, 37, 31, 30, 27,
+         34, 38, 28, 26, 27
+       ];
+       for (var patternIndex = 0; patternIndex < 40; patternIndex++) {
+         var patternX = patternLayout[patternIndex][0];
+         var patternY = patternLayout[patternIndex][1];
+         var patternSize = patternSizes[patternIndex];
+         var patternRotate = ((patternIndex * 47) % 100) - 50;
+         var patternOpacity = (0.085 + ((patternIndex * 7) % 6) / 100).toFixed(3);
+         var patternDuration = (10 + ((patternIndex * 7) % 48) / 10).toFixed(1);
+         var patternDelay = (-((patternIndex * 17) % 80) / 10).toFixed(1);
+    %>
+      <span class="phone-doodle" style="--x:<%= patternX.toFixed(1) %>%;--y:<%= patternY.toFixed(1) %>%;--size:<%= patternSize %>px;--rotate:<%= patternRotate %>deg;--base-opacity:<%= patternOpacity %>;--duration:<%= patternDuration %>s;--delay:<%= patternDelay %>s">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <use href="#phonePatternIcon" xlink:href="#phonePatternIcon"></use>
+        </svg>
+      </span>
+    <% } %>
+  </div>
+  <% } %>
+
+  <!-- Every restored card view uses the same short arrival transition. This
+       keeps direct links and used-card history from jumping straight to data. -->
+  <div class="loading-overlay<%= step === 'waiting' ? ' is-arriving' : '' %>" id="loadingOverlay" aria-hidden="false">
+    <div class="loader-stage">
+      <div class="loading-fill" aria-hidden="true"></div>
+      <div class="loader-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 1 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+        <div class="loader-glow"></div>
+      </div>
+    </div>
+    <div class="loader-bar">
+      <div class="loader-bar-fill"></div>
+    </div>
+    <div class="loader-text">载入中</div>
+  </div>
+  <script>
+  (function() {
+    var continueTransition = false;
+    try {
+      continueTransition = window.sessionStorage.getItem('qc86:page-transition') === '1';
+      window.sessionStorage.removeItem('qc86:page-transition');
+    } catch (e) {}
+
+    if (<%= step === 'waiting' ? 'true' : 'false' %>) {
+      var arrivalOverlay = document.getElementById('loadingOverlay');
+      if (arrivalOverlay) {
+        document.body.classList.add('transition-arrival');
+        arrivalOverlay.classList.remove('hidden');
+        arrivalOverlay.classList.add('is-arriving');
+        arrivalOverlay.setAttribute('aria-hidden', 'false');
+        var arrivalText = arrivalOverlay.querySelector('.loader-text');
+        if (arrivalText) arrivalText.textContent = continueTransition ? '号码已准备好' : '正在打开卡密';
+      }
+    }
+  })();
+  </script>
+
+  <canvas id="successParticles" aria-hidden="true"></canvas>
+
+
+  <!-- Background effects -->
+  <div class="bg-orb"></div>
+  <div class="bg-orb"></div>
+  <div class="bg-orb"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <!-- Main glass container -->
+  <main class="glass fade-in">
+    <!-- Brand header -->
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+      </div>
+      <h1 class="sms-wordmark">SMS</h1>
+    </div>
+
+    <!-- Error display -->
+    <% if (error) { %><div class="error-box fade-in"><%= error %></div><% } %>
+
+    <!-- ===== STEP: FILTERING PREFIX ===== -->
+    <% if (step === 'filtering') { %>
+    <section class="filtering-status" aria-live="polite">
+      <div class="filtering-phone" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+      </div>
+      <h2>正在筛选号码</h2>
+      <p id="filterMessage"><%= filterMessage || '正在逐个筛选号码，请稍候' %></p>
+      <div class="filtering-progress"><span id="filterRequestCount"><%= filterRequestCount || 0 %></span>&nbsp;/&nbsp;<span id="filterMaxRequests"><%= filterMaxRequests || 1 %></span>&nbsp;次请求</div>
+      <a class="btn btn-ghost filtering-back" id="filterBack" href="/?card=<%= encodeURIComponent(cardCode || '') %>">返回输入卡密</a>
+    </section>
+    <% } %>
+
+    <!-- ===== STEP: ENTER CARD ===== -->
+    <% if (step === 'enter_card') { %>
+    <!-- localStorage recovery: if user closed tab, refreshed, or returned later -->
+    <script>
+    (function() {
+      // Only run if no card_id in URL (server didn't restore)
+      var params = new URLSearchParams(window.location.search);
+      if (params.has('card_id') || params.has('card')) return;
+
+      // Only run on enter_card page
+      try {
+        var storedCode = localStorage.getItem('lastCardCode');
+        if (storedCode) {
+          fetch('/check-card-status-by-code/' + encodeURIComponent(storedCode))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data.found && data.active && data.phoneNumber) {
+                window.location.replace('/?card=' + encodeURIComponent(storedCode));
+              }
+            })
+            .catch(function() {});
+        }
+      } catch(e) {}
+    })();
+    </script>
+
+    <% if (phoneNumber) { %>
+
+    <div class="info-bar fade-in fade-in-d1">
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+        <div>
+          <div class="label">上一次请求的号码</div>
+          <div class="num"><%= phoneNumber %></div>
+        </div>
+      </div>
+      <div class="hint">⏱ 冷却中，倒计时结束后可获取新号码</div>
+    </div>
+    <% } %>
+    <% } %>
+
+    <% if (step === 'enter_card') { %>
+    <div class="fade-in fade-in-d1">
+      <form method="POST" action="/redeem" id="cardForm">
+        <div class="form-group">
+          <label for="card_code">卡密</label>
+          <input type="text" id="card_code" name="card_code" placeholder="ABCD-EFGH-IJKL-MNOP" value="<%= cardCode %>" required autocomplete="off" style="text-transform:uppercase">
+        </div>
+        <div id="cardInfo" class="card-info-bar"></div>
+        <button type="submit" class="btn btn-primary" id="redeemButton">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+          <span class="btn-label">获取手机号</span>
+        </button>
+        <div class="status-text"><span id="cardStatusText">输入卡密后自动匹配项目</span></div>
+      </form>
+    </div>
+    <script>
+      document.getElementById('card_code').addEventListener('input', function() {
+        var code = this.value.trim().toUpperCase();
+        if (code.length >= 8) {
+          var info = document.getElementById('cardInfo');
+          info.style.display = 'block';
+          info.innerHTML = '<span style="color:rgba(255,255,255,0.3);font-size:12px">🔍 正在查询...</span>';
+          fetch('/check-card?code=' + encodeURIComponent(code))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              var statusText = document.getElementById('cardStatusText');
+              var buttonLabel = document.querySelector('#redeemButton .btn-label');
+              info.style.background = '';
+              info.style.borderColor = '';
+              info.style.color = '';
+
+              if (data.can_view) {
+                var testTag = data.is_test ? ' <span class="test-badge">🧪 测试</span>' : '';
+                info.innerHTML = '📌 项目: <span class="highlight">' + data.channel_name + '</span> ｜ ' + data.status + testTag;
+                statusText.textContent = '点击下方按钮查看最后一次使用记录';
+                if (buttonLabel) buttonLabel.textContent = '查看使用记录';
+              } else if (data.can_use) {
+                var testTag = data.is_test ? ' <span class="test-badge">🧪 测试</span>' : '';
+                info.innerHTML = '📌 项目: <span class="highlight">' + data.channel_name + '</span> ｜ ' + data.status + testTag;
+                statusText.textContent = '匹配成功，点击下方按钮获取手机号';
+                if (buttonLabel) buttonLabel.textContent = '获取手机号';
+              } else if (data.found) {
+                var testTag = data.is_test ? ' <span class="test-badge">🧪 测试</span>' : '';
+                info.innerHTML = '⚠️ ' + data.channel_name + ' - ' + data.status + testTag;
+                statusText.textContent = '该卡密无法使用';
+                if (buttonLabel) buttonLabel.textContent = '获取手机号';
+                info.style.background = 'rgba(239,68,68,0.08)';
+                info.style.borderColor = 'rgba(239,68,68,0.15)';
+                info.style.color = '#fca5a5';
+              } else {
+                info.style.display = 'none';
+                statusText.textContent = '卡密不存在或已被删除';
+                if (buttonLabel) buttonLabel.textContent = '获取手机号';
+              }
+            })
+            .catch(function() { info.style.display = 'none'; });
+        } else {
+          document.getElementById('cardInfo').style.display = 'none';
+          document.getElementById('cardStatusText').textContent = '输入卡密后自动匹配项目';
+        }
+      });
+    </script>
+    <% } %>
+
+    <!-- ===== STEP: WAITING ===== -->
+    <% if (step === 'waiting') { %>
+    <% if (typeof previewMode !== 'undefined' && previewMode) { %>
+    <div class="project-badge fade-in" style="border-color:rgba(40,229,111,.32);background:rgba(40,229,111,.08);color:rgba(218,255,231,.92)">
+      界面测试模式 · 本地模拟，不请求 API
+    </div>
+    <% } %>
+    <div class="project-badge fade-in fade-in-d1">
+      📌 项目: <strong><%= channelName %></strong>
+      <span style="display:block;margin-top:2px">卡密: <span class="code"><%= cardCode %></span></span>
+      <% if (typeof isTest !== "undefined" && isTest) { %><span class="test-badge">🧪 测试卡密</span><% } %>
+    </div>
+
+    <div class="attempts-counter fade-in fade-in-d2">
+      剩余 <strong><span class="att-num" id="remainingCounter"><%= Math.max((typeof maxAttempts !== "undefined" ? maxAttempts : 3) - (typeof attempts !== "undefined" ? attempts : 1), 0) %></span></strong> 次获取机会
+    </div>
+
+    <!-- Phone number -->
+    <div class="result-box fade-in fade-in-d2">
+      <div class="label">当前手机号</div>
+      <div class="phone-row">
+        <div class="value"><span id="currentPhone"><%= phoneNumber %></span></div>
+        <button type="button" class="copy-btn" id="copyPhoneBtn" onclick="copyPhoneNumber()" title="复制手机号" aria-label="复制手机号">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- SMS result -->
+    <div id="smsResult" class="result-box success" style="<%= smsCode ? '' : 'display:none' %>">
+      <div class="label">验证码</div>
+      <div class="value sms-code"><%= smsCode %></div>
+      <div class="msg-text"><%= smsMessage %></div>
+    </div>
+
+    <!-- SMS waiting -->
+    <div id="smsWaiting" style="<%= smsCode ? 'display:none' : '' %>">
+      <div class="sms-waiting fade-in fade-in-d3">
+        <div class="waiting-msg"><span class="spinner"></span>等待短信验证码...</div>
+        <div class="sms-hint">系统会自动获取该号码收到的验证码</div>
+      </div>
+
+      <% if ((typeof attempts !== "undefined" ? attempts : 1) < (typeof maxAttempts !== "undefined" ? maxAttempts : 3)) { %>
+      <div id="countdownArea" class="countdown-area">
+        <div id="countdownText" class="countdown-text">
+          <div class="countdown-ring" id="countdownRing" data-total="<%= typeof cooldownRemaining !== "undefined" ? cooldownRemaining : (typeof cooldownSeconds !== "undefined" ? cooldownSeconds : 60) %>">
+            <svg width="56" height="56" viewBox="0 0 56 56">
+              <circle class="bg-ring" cx="28" cy="28" r="22"/>
+              <circle class="progress-ring" cx="28" cy="28" r="22" stroke-dashoffset="0"/>
+            </svg>
+            <span class="ring-label" id="countdownSeconds"><%= typeof cooldownRemaining !== "undefined" ? cooldownRemaining : (typeof cooldownSeconds !== "undefined" ? cooldownSeconds : 60) %></span>
+          </div>
+          <div style="margin-top:4px;font-size:12px;color:rgba(255,255,255,0.25)">可更换号码</div>
+        </div>
+        <button id="getNewPhoneBtn" class="btn btn-ghost" style="display:none;margin-top:8px" onclick="getNewPhone()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+          获取新号码（剩余 <span id="remainingAttempts"><%= (typeof maxAttempts !== "undefined" ? maxAttempts : 3) - (typeof attempts !== "undefined" ? attempts : 1) %></span> 次）
+        </button>
+      </div>
+      <% } else { %>
+      <div style="text-align:center;font-size:13px;color:rgba(239,68,68,0.65);margin-bottom:12px">⚠️ 已用完所有获取次数，等待验证码</div>
+      <% } %>
+    </div>
+
+    <!-- SMS success -->
+    <div id="smsSuccess" style="<%= smsCode ? '' : 'display:none' %>">
+      <div class="success-msg check-anim">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        已成功获取验证码，卡密已失效
+      </div>
+    </div>
+
+    <!-- Return button -->
+    <button class="btn btn-secondary" onclick="<% if (typeof previewMode !== 'undefined' && previewMode) { %>window.location.href='/admin/test'<% } else { %>try { localStorage.removeItem('lastCardCode'); } catch (e) {} window.location.href='/?exit=1'<% } %>">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      返回
+    </button>
+    <% } %>
+
+  </main>
+
+  <!-- ===== LOADING SCREEN HIDE SCRIPT ===== -->
+  <script>
+  (function() {
+    var overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+      var overlayHideTimer = null;
+
+      window.qc86ShowLoadingOverlay = function(message) {
+        var fill = overlay.querySelector('.loading-fill');
+        var text = overlay.querySelector('.loader-text');
+        if (overlayHideTimer) {
+          clearTimeout(overlayHideTimer);
+          overlayHideTimer = null;
+        }
+        overlay.classList.remove('is-arriving');
+        overlay.classList.add('is-submitting');
+        overlay.classList.remove('hidden');
+        overlay.setAttribute('aria-hidden', 'false');
+        if (text && message) text.textContent = message;
+        if (fill) {
+          fill.style.animation = 'none';
+          void fill.offsetWidth;
+          fill.style.animation = '';
+        }
+      };
+
+      window.qc86HideLoadingOverlay = function() {
+        var hideDuration = overlay.classList.contains('is-arriving') ? 680 : 260;
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
+        overlayHideTimer = setTimeout(function() {
+          overlay.classList.remove('is-submitting');
+          overlay.classList.remove('is-arriving');
+          document.body.classList.remove('transition-arrival');
+          overlayHideTimer = null;
+        }, hideDuration);
+      };
+
+      // Let the centered phone complete its green screen-fill reveal.
+      if (!overlay.classList.contains('hidden')) {
+        var startTime = Date.now();
+        var isArrivalTransition = overlay.classList.contains('is-arriving');
+        var hideStarted = false;
+        function hideLoading() {
+          if (hideStarted) return;
+          hideStarted = true;
+          var elapsed = Date.now() - startTime;
+          var minimumVisibleTime = isArrivalTransition ? 760 : 1120;
+          var delay = Math.max(0, minimumVisibleTime - elapsed);
+          setTimeout(function() {
+            window.qc86HideLoadingOverlay();
+            setTimeout(function() {
+              window.dispatchEvent(new CustomEvent('qc86:loading-complete'));
+            }, isArrivalTransition ? 700 : 320);
+          }, delay);
+        }
+        if (document.readyState === 'complete') {
+          hideLoading();
+        } else {
+          window.addEventListener('load', hideLoading);
+          // Fallback keeps the page accessible even if a resource stalls.
+          setTimeout(hideLoading, 2400);
+        }
+      }
+    }
+  })();
+  </script>
+
+  <!-- Auto-fill card code from URL parameter -->
+  <script>
+  (function() {
+    var params = new URLSearchParams(window.location.search);
+    var cardCode = params.get('card');
+    if (cardCode) {
+      var input = document.getElementById('card_code');
+      if (input) {
+        input.value = cardCode.toUpperCase();
+        input.dispatchEvent(new Event('input'));
+        setTimeout(function() {
+          input.scrollIntoView({ behavior: 'smooth' });
+        }, 500);
+      }
+    }
+  })();
+  </script>
+
+ <!-- Waiting step scripts -->
+ <% if (step === 'filtering') { %>
+ <script>
+   (function() {
+     var cardId = <%- JSON.stringify(String(cardId || '')) %>;
+     var cardCode = <%- JSON.stringify(String(cardCode || '')) %>;
+     var message = document.getElementById('filterMessage');
+     var count = document.getElementById('filterRequestCount');
+     var max = document.getElementById('filterMaxRequests');
+     var back = document.getElementById('filterBack');
+     var pollTimer = null;
+     var pollController = null;
+     var pollInFlight = false;
+     var stopped = false;
+     var redirecting = false;
+     var lastStatus = '';
+
+     function setMessage(text) {
+       if (message && text) message.textContent = text;
+     }
+
+     function stopPolling() {
+       stopped = true;
+       if (pollTimer) {
+         window.clearTimeout(pollTimer);
+         pollTimer = null;
+       }
+       if (pollController) {
+         pollController.abort();
+         pollController = null;
+       }
+     }
+
+     function schedulePoll(delay) {
+       if (stopped || redirecting || document.visibilityState === 'hidden') return;
+       if (pollTimer) window.clearTimeout(pollTimer);
+       pollTimer = window.setTimeout(pollStatus, delay);
+     }
+
+     async function pollStatus() {
+       pollTimer = null;
+       if (stopped || redirecting || document.visibilityState === 'hidden') return;
+       if (pollInFlight) {
+         schedulePoll(250);
+         return;
+       }
+       pollInFlight = true;
+       pollController = typeof AbortController === 'function' ? new AbortController() : null;
+
+       try {
+         var response = await fetch('/phone-request-status/' + encodeURIComponent(cardId), {
+           cache: 'no-store',
+           signal: pollController ? pollController.signal : undefined
+         });
+         if (!response.ok) throw new Error('状态请求失败');
+         var data = await response.json();
+         if (stopped) return;
+
+         if (!data.found) {
+           setMessage('卡密不存在或已被删除');
+           if (back) back.style.display = 'inline-flex';
+           stopPolling();
+           return;
+         }
+
+         var statusKey = [data.state, data.message, data.requestCount, data.maxRequests].join('|');
+         if (statusKey !== lastStatus) {
+           lastStatus = statusKey;
+           setMessage(data.message || '正在逐个筛选号码，请稍候');
+           if (count) count.textContent = Math.max(0, Number(data.requestCount) || 0);
+           if (max) max.textContent = Math.max(1, Number(data.maxRequests) || 1);
+         }
+
+         if (data.state === 'success' && data.phoneNumber && !redirecting) {
+           redirecting = true;
+           stopPolling();
+           window.location.replace('/?card=' + encodeURIComponent(data.cardCode || cardCode));
+           return;
+         }
+         if (data.state === 'failed') {
+           if (back) back.style.display = 'inline-flex';
+           stopPolling();
+           return;
+         }
+         schedulePoll(1200);
+       } catch (error) {
+         if (!stopped && !(error && error.name === 'AbortError')) {
+           setMessage('网络连接暂时不稳定，正在继续等待筛选结果');
+           schedulePoll(1800);
+         } else if (!stopped && document.visibilityState === 'visible') {
+           schedulePoll(250);
+         }
+       } finally {
+         pollInFlight = false;
+         pollController = null;
+       }
+     }
+
+     pollStatus();
+     document.addEventListener('visibilitychange', function() {
+       if (document.visibilityState === 'hidden') {
+         if (pollController) pollController.abort();
+         if (pollTimer) {
+           window.clearTimeout(pollTimer);
+           pollTimer = null;
+         }
+       } else if (!stopped && !redirecting) {
+         schedulePoll(0);
+       }
+     });
+     window.addEventListener('pagehide', stopPolling, { once: true });
+   })();
+ </script>
+ <% } %>
+
+ <!-- Waiting step scripts -->
+ <% if (step === 'waiting') { %>
+ <script>
+   var cardId = <%- JSON.stringify(String(cardId || '')) %>;
+   var interval = <%= refreshInterval || 5000 %>;
+	   var hasSms = <%= smsCode ? 'true' : 'false' %>;
+	   var isPreviewMode = <%= (typeof previewMode !== 'undefined' && previewMode) ? 'true' : 'false' %>;
+	   var previewPhoneIndex = 47;
+	   var previewAttempt = <%= typeof attempts !== "undefined" ? attempts : 1 %>;
+	   var previewMaxAttempts = <%= typeof maxAttempts !== "undefined" ? maxAttempts : 3 %>;
+
+    // Update URL to include card code so refresh restores the waiting state
+    if (!isPreviewMode && window.history && window.history.replaceState) {
+      window.history.replaceState({ cardCode: <%- JSON.stringify(cardCode) %> }, '', '/?card=' + <%- JSON.stringify(cardCode || '') %>);
+    }
+    // Save card_id to localStorage as extra safety (survives full tab close)
+    if (!isPreviewMode && window.localStorage) {
+      try { localStorage.setItem('lastCardCode', <%- JSON.stringify(cardCode || '') %>); } catch(e) {}
+    }
+
+    // Poll only while this page is visible. Stop immediately after a code is
+    // stored, otherwise a long-open tab keeps making unnecessary requests.
+    if (!hasSms && !isPreviewMode) {
+      var smsPollTimer = null;
+      var smsPollInFlight = false;
+
+      function stopSmsPolling() {
+        if (smsPollTimer) {
+          window.clearInterval(smsPollTimer);
+          smsPollTimer = null;
+        }
+      }
+
+      function checkSms() {
+        if (smsPollInFlight || document.visibilityState === 'hidden') return;
+        smsPollInFlight = true;
+        fetch('/check-sms/' + cardId)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.found && data.smsCode) {
+              stopSmsPolling();
+              var w = document.getElementById('smsWaiting');
+              var s = document.getElementById('smsSuccess');
+              if (w) w.style.display = 'none';
+              if (s) s.style.display = 'block';
+              var el = document.getElementById('smsResult');
+              if (el) {
+                el.style.display = 'block';
+                var codeEl = el.querySelector('.value.sms-code');
+                var msgEl = el.querySelector('.msg-text');
+                if (codeEl) codeEl.textContent = data.smsCode;
+                if (msgEl) msgEl.textContent = data.smsMessage || '';
+                document.dispatchEvent(new CustomEvent('qc86:sms-available', {
+                  detail: { code: data.smsCode }
+                }));
+              }
+            }
+          })
+          .catch(function() {})
+          .then(function() { smsPollInFlight = false; });
+      }
+      checkSms();
+      smsPollTimer = window.setInterval(checkSms, Math.max(interval, 3000));
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') checkSms();
+      });
+      window.addEventListener('pagehide', stopSmsPolling, { once: true });
+    }
+
+    // The server is the source of truth for cooldowns. This keeps refreshes,
+    // failed duplicate clicks, and successful number changes in sync.
+    var cooldownTimer = null;
+    function applyCooldown(seconds, remainingAttempts) {
+      var countdownEl = document.getElementById('countdownSeconds');
+      var countdownText = document.getElementById('countdownText');
+      var getBtn = document.getElementById('getNewPhoneBtn');
+      var remainingSeconds = Math.max(0, Math.ceil(Number(seconds) || 0));
+      var attemptsLeft = Math.max(0, Number(remainingAttempts) || 0);
+
+      if (cooldownTimer) {
+        clearInterval(cooldownTimer);
+        cooldownTimer = null;
+      }
+      if (!countdownEl || !countdownText || !getBtn) return;
+
+      countdownEl.textContent = remainingSeconds;
+      if (remainingSeconds <= 0) {
+        countdownText.style.display = 'none';
+        getBtn.style.display = attemptsLeft > 0 ? 'inline-flex' : 'none';
+        return;
+      }
+
+      countdownText.style.display = 'block';
+      getBtn.style.display = 'none';
+      cooldownTimer = setInterval(function() {
+        remainingSeconds--;
+        countdownEl.textContent = Math.max(remainingSeconds, 0);
+        if (remainingSeconds <= 0) {
+          clearInterval(cooldownTimer);
+          cooldownTimer = null;
+          countdownText.style.display = 'none';
+          getBtn.style.display = attemptsLeft > 0 ? 'inline-flex' : 'none';
+        }
+      }, 1000);
+    }
+
+    if (!hasSms && document.getElementById('countdownSeconds')) {
+      applyCooldown(
+        <%= typeof cooldownRemaining !== "undefined" ? cooldownRemaining : (typeof cooldownSeconds !== "undefined" ? cooldownSeconds : 60) %>,
+        <%= (typeof maxAttempts !== "undefined" ? maxAttempts : 3) - (typeof attempts !== "undefined" ? attempts : 1) %>
+      );
+    }
+
+    // Get new phone number
+    async function getNewPhone() {
+      var btn = document.getElementById('getNewPhoneBtn');
+      if (!btn || btn.disabled) return;
+      var originalButtonHtml = btn.innerHTML;
+      var loadingStartedAt = Date.now();
+
+      function finishPhoneLoading(callback) {
+        var remainingAnimationTime = Math.max(0, 1120 - (Date.now() - loadingStartedAt));
+        window.setTimeout(function() {
+          if (window.qc86HideLoadingOverlay) window.qc86HideLoadingOverlay();
+          if (callback) callback();
+        }, remainingAnimationTime);
+      }
+
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;margin:0"></span> 获取中...';
+      if (window.qc86ShowLoadingOverlay) {
+        window.qc86ShowLoadingOverlay('正在获取新号码');
+      }
+
+      if (isPreviewMode) {
+        window.setTimeout(function() {
+          previewPhoneIndex++;
+          var phoneEl = document.getElementById('currentPhone');
+          var counterEl = document.getElementById('remainingCounter');
+          var remEl = document.getElementById('remainingAttempts');
+          previewAttempt++;
+          var remaining = Math.max(previewMaxAttempts - previewAttempt, 0);
+
+          if (phoneEl) phoneEl.textContent = '138000000' + previewPhoneIndex;
+          if (counterEl) counterEl.textContent = remaining;
+          if (remEl) remEl.textContent = remaining;
+          btn.classList.remove('is-loading');
+          btn.disabled = false;
+          btn.innerHTML = '获取新号码（剩余 <span id="remainingAttempts">' + remaining + '</span> 次）';
+          btn.style.display = remaining > 0 ? 'inline-flex' : 'none';
+          finishPhoneLoading(function() {
+            showToast('已切换本地模拟号码');
+          });
+        }, 450);
+        return;
+      }
+
+      try {
+        var resp = await fetch('/get-new-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_id: cardId })
+        });
+        var data = await resp.json();
+
+        if (data.success && data.pending) {
+          try { window.sessionStorage.setItem('qc86:page-transition', '1'); } catch (e) {}
+          // Wait for two frames before navigating so the full-screen phone
+          // animation can actually paint instead of disappearing immediately.
+          var targetUrl = '/?card=' + encodeURIComponent(data.cardCode || <%- JSON.stringify(cardCode || '') %>);
+          var transitionDelay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 80 : 1060;
+          window.requestAnimationFrame(function() {
+            window.requestAnimationFrame(function() {
+              window.setTimeout(function() {
+                window.location.assign(targetUrl);
+              }, transitionDelay);
+            });
+          });
+          return;
+        }
+
+        if (data.success) {
+          var phoneEl = document.getElementById('currentPhone');
+          if (phoneEl) {
+            phoneEl.classList.remove('num-transition');
+            void phoneEl.offsetWidth;
+            phoneEl.textContent = data.phoneNumber;
+            phoneEl.classList.add('num-transition');
+          }
+
+          var remaining = data.maxAttempts - data.attempts;
+          var counterEl = document.getElementById('remainingCounter');
+          if (counterEl) counterEl.textContent = Math.max(remaining, 0);
+          var remEl = document.getElementById('remainingAttempts');
+          if (remEl) remEl.textContent = remaining;
+
+          var newBtn = document.getElementById('getNewPhoneBtn');
+          if (newBtn) {
+            newBtn.classList.remove('is-loading');
+            newBtn.disabled = false;
+            newBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> 获取新号码（剩余 ' + remaining + ' 次）';
+          }
+          applyCooldown(data.cooldownRemaining, remaining);
+          finishPhoneLoading();
+        } else {
+          showToast(data.error || '获取失败');
+          if (data.currentPhone) {
+            var phoneEl = document.getElementById('currentPhone');
+            if (phoneEl) phoneEl.textContent = data.currentPhone;
+          }
+          if (typeof data.cooldownRemaining !== 'undefined') {
+            var retryRemaining = Number(data.maxAttempts) - Number(data.attempts);
+            applyCooldown(data.cooldownRemaining, retryRemaining);
+          }
+          btn.classList.remove('is-loading');
+          btn.innerHTML = originalButtonHtml;
+          btn.disabled = false;
+          finishPhoneLoading();
+        }
+      } catch(e) {
+        showToast('请求失败');
+        btn.classList.remove('is-loading');
+        btn.innerHTML = originalButtonHtml;
+        btn.disabled = false;
+        finishPhoneLoading();
+      }
+    }
+
+    function copyPhoneNumber() {
+      var phoneEl = document.getElementById('currentPhone');
+      if (!phoneEl) return;
+      var phone = phoneEl.textContent.trim();
+      if (!phone) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(phone).then(function() {
+          markPhoneCopied();
+          showToast('\u2705 \u5df2\u590d\u5236\u624b\u673a\u53f7');
+        }).catch(function() {
+          showToast('\u590d\u5236\u5931\u8d25\uff0c\u8bf7\u624b\u52a8\u590d\u5236');
+        });
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = phone;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          markPhoneCopied();
+          showToast('\u2705 \u5df2\u590d\u5236\u624b\u673a\u53f7');
+        } catch(e) {
+          showToast('\u590d\u5236\u5931\u8d25\uff0c\u8bf7\u624b\u52a8\u590d\u5236');
+        }
+        document.body.removeChild(ta);
+      }
+    }
+
+    function markPhoneCopied() {
+      var btn = document.getElementById('copyPhoneBtn');
+      if (!btn) return;
+      btn.classList.add('copied');
+      btn.setAttribute('title', '\u5df2\u590d\u5236');
+      window.setTimeout(function() {
+        btn.classList.remove('copied');
+        btn.setAttribute('title', '\u590d\u5236\u624b\u673a\u53f7');
+      }, 1100);
+    }
+
+    function showToast(msg) {
+      var existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+      var t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(function() { t.style.opacity = '0'; setTimeout(function() { t.remove(); }, 300); }, 2500);
+    }
+  </script>
+  <% } %>
+
+  <!-- ===== INTERACTIVE EFFECTS ===== -->
+  <script>
+  (function() {
+    'use strict';
+
+    // ---- 1. SMS success side-spray ----
+    (function() {
+      var canvas = document.getElementById('successParticles');
+      if (!canvas || !canvas.getContext) return;
+      var ctx = canvas.getContext('2d');
+      var particles = [];
+      var frame = 0;
+      var active = false;
+      var colors = ['#28e56f', '#70f39a', '#12b956', '#baffcf', '#ffffff'];
+
+      function resize() {
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(window.innerWidth * dpr);
+        canvas.height = Math.floor(window.innerHeight * dpr);
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      resize();
+      window.addEventListener('resize', resize, { passive: true });
+
+      window.launchSuccessParticles = function(force) {
+        if (!force && window.__smsParticlesShown) return;
+        window.__smsParticlesShown = true;
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if (active) return;
+        active = true;
+        particles = [];
+        var y = Math.min(Math.max(window.innerHeight * 0.54, 150), window.innerHeight - 120);
+        for (var side = 0; side < 2; side++) {
+          for (var i = 0; i < 34; i++) {
+            var fromLeft = side === 0;
+            particles.push({
+              x: fromLeft ? -10 - Math.random() * 24 : window.innerWidth + 10 + Math.random() * 24,
+              y: y + (Math.random() - 0.5) * 72,
+              vx: (fromLeft ? 1 : -1) * (2.3 + Math.random() * 4.8),
+              vy: (Math.random() - 0.5) * 5.2,
+              gravity: 0.06 + Math.random() * 0.05,
+              size: 2 + Math.random() * 4,
+              length: 5 + Math.random() * 10,
+              rotation: Math.random() * Math.PI,
+              spin: (Math.random() - 0.5) * 0.18,
+              life: 1,
+              decay: 0.010 + Math.random() * 0.010,
+              color: colors[Math.floor(Math.random() * colors.length)]
+            });
+          }
+        }
+
+        var started = performance.now();
+        cancelAnimationFrame(frame);
+        function animate(now) {
+          var elapsed = now - started;
+          ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+          particles.forEach(function(p) {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += p.gravity;
+            p.rotation += p.spin;
+            p.life -= p.decay;
+            if (p.life <= 0) return;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.25));
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.length / 2, -p.size / 2, p.length, p.size);
+            ctx.restore();
+          });
+          if (elapsed < 2100) {
+            frame = requestAnimationFrame(animate);
+          } else {
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            particles = [];
+            active = false;
+          }
+        }
+        frame = requestAnimationFrame(animate);
+      };
+    })();
+
+    // ---- 2. Mouse parallax for background orbs ----
+    var orbs = document.querySelectorAll('.bg-orb');
+    if (orbs.length && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      var orbData = [];
+      var orbFrame = 0;
+      orbs.forEach(function(o) {
+        orbData.push({
+          el: o,
+          x: 0, y: 0,
+          targetX: 0, targetY: 0,
+          speed: 0.03 + Math.random() * 0.02
+        });
+      });
+      function animateOrbs() {
+        var stillMoving = false;
+        orbData.forEach(function(o) {
+          var dx = o.targetX - o.x;
+          var dy = o.targetY - o.y;
+          o.x += dx * o.speed;
+          o.y += dy * o.speed;
+          if (Math.abs(dx) > 0.12 || Math.abs(dy) > 0.12) stillMoving = true;
+          o.el.style.transform = 'translate(' + o.x.toFixed(1) + 'px, ' + o.y.toFixed(1) + 'px)';
+        });
+        orbFrame = stillMoving && document.visibilityState === 'visible'
+          ? window.requestAnimationFrame(animateOrbs)
+          : 0;
+      }
+      function scheduleOrbMotion() {
+        if (!orbFrame && document.visibilityState === 'visible') {
+          orbFrame = window.requestAnimationFrame(animateOrbs);
+        }
+      }
+      document.addEventListener('mousemove', function(e) {
+        var cx = e.clientX / window.innerWidth - 0.5;
+        var cy = e.clientY / window.innerHeight - 0.5;
+        orbData.forEach(function(o, i) {
+          o.targetX = cx * (35 + i * 18);
+          o.targetY = cy * (35 + i * 18);
+        });
+        scheduleOrbMotion();
+      });
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden' && orbFrame) {
+          window.cancelAnimationFrame(orbFrame);
+          orbFrame = 0;
+        }
+      });
+    }
+
+    // ---- 3. Button ripple effect ----
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('.btn');
+      if (!btn || btn.disabled) return;
+      var rect = btn.getBoundingClientRect();
+      var ripple = document.createElement('span');
+      ripple.className = 'ripple-effect';
+      var size = Math.max(rect.width, rect.height);
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+      ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+      btn.appendChild(ripple);
+      setTimeout(function() { ripple.remove(); }, 700);
+    });
+
+    // ---- 3b. Interactive telephone-pattern background ----
+    var phonePattern = document.getElementById('phonePattern');
+    if (phonePattern) {
+      var phoneDoodles = Array.prototype.slice.call(phonePattern.querySelectorAll('.phone-doodle'));
+      var phonePatternFrame = 0;
+      var pointerX = window.innerWidth / 2;
+      var pointerY = window.innerHeight / 2;
+      var resetPhonePatternTimer = 0;
+
+      function resetPhonePattern() {
+        phoneDoodles.forEach(function(doodle) {
+          doodle.classList.remove('is-near');
+          doodle.style.removeProperty('--react-x');
+          doodle.style.removeProperty('--react-y');
+          doodle.style.removeProperty('--doodle-scale');
+          doodle.style.removeProperty('--doodle-glow');
+          doodle.style.removeProperty('--doodle-opacity');
+        });
+        phonePattern.style.setProperty('--touch-pulse', '0');
+      }
+
+      function updatePhonePattern() {
+        phonePatternFrame = 0;
+        phonePattern.style.setProperty('--pointer-x', (pointerX / window.innerWidth * 100).toFixed(1) + '%');
+        phonePattern.style.setProperty('--pointer-y', (pointerY / window.innerHeight * 100).toFixed(1) + '%');
+
+        phoneDoodles.forEach(function(doodle) {
+          var rect = doodle.getBoundingClientRect();
+          var dx = pointerX - (rect.left + rect.width / 2);
+          var dy = pointerY - (rect.top + rect.height / 2);
+          var distance = Math.sqrt(dx * dx + dy * dy);
+          var strength = Math.max(0, 1 - distance / 155);
+          var baseOpacity = parseFloat(doodle.style.getPropertyValue('--base-opacity')) || 0.1;
+
+          doodle.classList.toggle('is-near', strength > 0.08);
+          doodle.style.setProperty('--react-x', (dx * strength * 0.035).toFixed(2) + 'px');
+          doodle.style.setProperty('--react-y', (dy * strength * 0.035).toFixed(2) + 'px');
+          doodle.style.setProperty('--doodle-scale', (1 + strength * 0.18).toFixed(3));
+          doodle.style.setProperty('--doodle-glow', (strength * 16).toFixed(1) + 'px');
+          doodle.style.setProperty('--doodle-opacity', Math.min(0.76, baseOpacity + strength * 0.60).toFixed(3));
+        });
+      }
+
+      document.addEventListener('pointermove', function(e) {
+        if (e.pointerType !== 'mouse') return;
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+        if (!phonePatternFrame) phonePatternFrame = window.requestAnimationFrame(updatePhonePattern);
+      }, { passive: true });
+      document.addEventListener('pointerdown', function(e) {
+        if (e.pointerType !== 'mouse' && e.target.closest('main, .loading-overlay')) return;
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+        phonePattern.style.setProperty('--touch-pulse', e.pointerType === 'mouse' ? '0' : '1');
+        if (!phonePatternFrame) phonePatternFrame = window.requestAnimationFrame(updatePhonePattern);
+        window.clearTimeout(resetPhonePatternTimer);
+      }, { passive: true });
+      document.addEventListener('pointerup', function(e) {
+        if (e.pointerType === 'mouse') return;
+        window.clearTimeout(resetPhonePatternTimer);
+        resetPhonePatternTimer = window.setTimeout(resetPhonePattern, 280);
+      }, { passive: true });
+      document.addEventListener('pointercancel', resetPhonePattern, { passive: true });
+      document.documentElement.addEventListener('mouseleave', resetPhonePattern);
+      window.addEventListener('blur', resetPhonePattern);
+    }
+
+    // ---- 3c. Decorative emoji proximity and tap feedback ----
+    var emojiChips = document.querySelectorAll('.emoji-chip');
+    if (emojiChips.length) {
+      var finePointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+
+      if (finePointer) {
+        document.addEventListener('pointermove', function(e) {
+          emojiChips.forEach(function(chip) {
+            var rect = chip.getBoundingClientRect();
+            var cx = rect.left + rect.width / 2;
+            var cy = rect.top + rect.height / 2;
+            var dx = e.clientX - cx;
+            var dy = e.clientY - cy;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+            var isNear = distance < 120;
+            chip.classList.toggle('is-near', isNear);
+            chip.style.setProperty('--chip-x', isNear ? Math.max(-3, Math.min(3, dx * 0.025)).toFixed(1) + 'px' : '0px');
+            chip.style.setProperty('--chip-y', isNear ? Math.max(-3, Math.min(3, dy * 0.025)).toFixed(1) + 'px' : '0px');
+          });
+        }, { passive: true });
+      }
+
+      emojiChips.forEach(function(chip) {
+        chip.addEventListener('pointerdown', function() {
+          chip.classList.remove('is-active');
+          void chip.offsetWidth;
+          chip.classList.add('is-active');
+
+          for (var i = 0; i < 6; i++) {
+            var spark = document.createElement('i');
+            var angle = (Math.PI * 2 * i / 6) + Math.random() * 0.35;
+            var distance = 18 + Math.random() * 13;
+            spark.className = 'emoji-spark';
+            spark.style.setProperty('--spark-x', Math.cos(angle) * distance + 'px');
+            spark.style.setProperty('--spark-y', Math.sin(angle) * distance + 'px');
+            chip.appendChild(spark);
+            window.setTimeout(function(node) { node.remove(); }, 620, spark);
+          }
+
+          window.setTimeout(function() { chip.classList.remove('is-active'); }, 540);
+        });
+      });
+
+      var bottomEmojiRail = document.querySelector('.emoji-rail.bottom');
+      var mainGlass = document.querySelector('main.glass');
+      if (bottomEmojiRail && mainGlass) {
+        var emojiRailFrame = 0;
+        function updateBottomEmojiRail() {
+          emojiRailFrame = 0;
+          if (!window.matchMedia('(max-width: 768px)').matches) {
+            bottomEmojiRail.classList.remove('is-obscured');
+            return;
+          }
+
+          var glassRect = mainGlass.getBoundingClientRect();
+          var railStyle = window.getComputedStyle(bottomEmojiRail);
+          var railBottom = parseFloat(railStyle.bottom) || 10;
+          var railTop = window.innerHeight - railBottom - bottomEmojiRail.offsetHeight;
+          var overlapsGlass = glassRect.bottom > railTop - 8 && glassRect.top < window.innerHeight;
+          bottomEmojiRail.classList.toggle('is-obscured', overlapsGlass);
+        }
+        function scheduleBottomEmojiRailUpdate() {
+          if (!emojiRailFrame) emojiRailFrame = window.requestAnimationFrame(updateBottomEmojiRail);
+        }
+
+        window.addEventListener('scroll', scheduleBottomEmojiRailUpdate, { passive: true });
+        window.addEventListener('resize', scheduleBottomEmojiRailUpdate);
+        updateBottomEmojiRail();
+      }
+    }
+
+    // ---- 4. Shake error boxes on appearance ----
+    var errorBox = document.querySelector('.error-box');
+    if (errorBox) {
+      errorBox.classList.add('shake');
+      setTimeout(function() { errorBox.classList.remove('shake'); }, 600);
+    }
+
+    // ---- 5. SMS code reminder: replay when the customer returns to the tab ----
+    (function() {
+      var target = document.getElementById('smsResult');
+      if (!target) return;
+      var lastReminderAt = 0;
+
+      function playSmsReminder() {
+        if (target.style.display === 'none') return;
+        var now = Date.now();
+        if (now - lastReminderAt < 1800) return;
+        lastReminderAt = now;
+        target.classList.remove('pulse-glow');
+        void target.offsetWidth;
+        target.classList.add('pulse-glow');
+        if (window.launchSuccessParticles) window.launchSuccessParticles(true);
+        setTimeout(function() { target.classList.remove('pulse-glow'); }, 4500);
+      }
+
+      var obs = new MutationObserver(function() {
+        playSmsReminder();
+      });
+      obs.observe(target, { attributes: true, attributeFilter: ['style'] });
+
+      document.addEventListener('qc86:sms-available', function() {
+        window.setTimeout(playSmsReminder, 120);
+      });
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') window.setTimeout(playSmsReminder, 360);
+      });
+      window.addEventListener('focus', function() {
+        window.setTimeout(playSmsReminder, 360);
+      });
+      window.addEventListener('pageshow', function() {
+        window.setTimeout(playSmsReminder, 360);
+      });
+
+      // A saved code is treated as a reminder on every return, rather than a
+      // one-time animation the customer can miss while switching apps.
+      if (target.style.display !== 'none') {
+        var playInitialSuccess = function() {
+          setTimeout(playSmsReminder, 160);
+        };
+
+        if (document.getElementById('loadingOverlay')) {
+          window.addEventListener('qc86:loading-complete', playInitialSuccess, { once: true });
+        } else {
+          playInitialSuccess();
+        }
+      }
+    })();
+
+    // ---- 6. Auto-scroll to card input ----
+    var cardInput = document.getElementById('card_code');
+    if (cardInput) {
+      setTimeout(function() {
+        cardInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 400);
+    }
+
+    // ---- 7. Countdown ring progress ----
+    var countdownRing = document.getElementById('countdownRing');
+    if (countdownRing) {
+      var ringCircle = countdownRing.querySelector('.progress-ring');
+      if (ringCircle) {
+        var ringRadius = 22;
+        var circumference = 2 * Math.PI * ringRadius;
+        ringCircle.style.strokeDasharray = circumference;
+        ringCircle.style.strokeDashoffset = '0';
+        var originalSeconds = parseInt(countdownRing.getAttribute('data-total')) || 60;
+        var ringTimer = setInterval(function() {
+          var secEl = document.getElementById('countdownSeconds');
+          if (!secEl) { clearInterval(ringTimer); return; }
+          var currentSec = parseInt(secEl.textContent) || 0;
+          var progress = currentSec / originalSeconds;
+          ringCircle.style.strokeDashoffset = (circumference * (1 - progress)).toFixed(1);
+          if (currentSec <= 0) {
+            clearInterval(ringTimer);
+            ringCircle.style.strokeDashoffset = '0';
+          }
+        }, 250);
+      }
+    }
+
+    // ---- 8. Glass light follows fine-pointer movement ----
+    var glass = document.querySelector('.glass');
+    if (glass && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      glass.addEventListener('mousemove', function(e) {
+        var rect = glass.getBoundingClientRect();
+        var px = (e.clientX - rect.left) / rect.width;
+        var py = (e.clientY - rect.top) / rect.height;
+        var x = px - 0.5;
+        var y = py - 0.5;
+        glass.style.setProperty('--glass-x', (px * 100).toFixed(1) + '%');
+        glass.style.setProperty('--glass-y', (py * 100).toFixed(1) + '%');
+        glass.style.transform =
+          'perspective(1000px) rotateY(' + (x * 1.8).toFixed(2) + 'deg) rotateX(' + (-y * 1.5).toFixed(2) + 'deg) translateY(-1px)';
+      });
+      glass.addEventListener('mouseleave', function() {
+        glass.style.transform = 'perspective(800px) rotateY(0deg) rotateX(0deg)';
+        glass.style.setProperty('--glass-x', '50%');
+        glass.style.setProperty('--glass-y', '0%');
+      });
+    }
+
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      document.addEventListener('mousemove', function(e) {
+        document.body.style.setProperty('--page-x', (e.clientX / window.innerWidth * 100).toFixed(1) + '%');
+        document.body.style.setProperty('--page-y', (e.clientY / window.innerHeight * 100).toFixed(1) + '%');
+      });
+    }
+
+    var redeemForm = document.getElementById('cardForm');
+    var redeemButton = document.getElementById('redeemButton');
+    if (redeemForm && redeemButton) {
+      var redeemSubmitting = false;
+      redeemForm.addEventListener('submit', function(event) {
+        if (redeemSubmitting) return;
+        event.preventDefault();
+        redeemSubmitting = true;
+        redeemButton.disabled = true;
+        redeemButton.classList.add('is-loading');
+        var label = redeemButton.querySelector('.btn-label');
+        if (label) label.textContent = '正在连接';
+        if (window.qc86ShowLoadingOverlay) {
+          window.qc86ShowLoadingOverlay('正在获取号码');
+        }
+        var transitionDelay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 120 : 1180;
+        window.setTimeout(function() {
+          try {
+            window.sessionStorage.setItem('qc86:page-transition', '1');
+          } catch (e) {}
+          HTMLFormElement.prototype.submit.call(redeemForm);
+        }, transitionDelay);
+      });
+    }
+
+    // ---- 9. Brand icon idle pulse ----
+    var brandIcon = document.querySelector('.brand-icon');
+    if (brandIcon) {
+      var pulseInterval;
+      brandIcon.addEventListener('mouseenter', function() {
+        clearInterval(pulseInterval);
+      });
+      brandIcon.addEventListener('mouseleave', function() {
+        var count = 0;
+        pulseInterval = setInterval(function() {
+          count++;
+          if (count > 1) { clearInterval(pulseInterval); return; }
+          brandIcon.style.transform = 'scale(1.03)';
+          setTimeout(function() { brandIcon.style.transform = ''; }, 300);
+        }, 4000);
+      });
+      // Initial pulse after 2s
+      setTimeout(function() {
+        brandIcon.style.transform = 'scale(1.03)';
+        setTimeout(function() { brandIcon.style.transform = ''; }, 300);
+      }, 2000);
+    }
+
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+<div class="form-group"><label>服务商名称</label><input name="name" id="<%= prefix %>ProviderName" required placeholder="例如：uoomsg 主账号"></div>
+<div class="form-group"><label>API 类型</label><select name="provider_type" id="<%= prefix %>ProviderType" onchange="syncProviderType(this)"><option value="qc86">qc86</option><option value="uoomsg">uoomsg</option></select></div>
+<div class="form-group"><label>API 地址</label><input name="base_url" id="<%= prefix %>BaseUrl" required value="https://api.qc86.shop/api"></div>
+<div class="credential-group" data-provider-type="qc86">
+  <div class="form-group"><label>账号</label><input name="username" id="<%= prefix %>Username" autocomplete="off" placeholder="<%= prefix === 'edit' ? '留空表示保持不变' : '' %>"></div>
+  <div class="form-group"><label>密码</label><input type="password" name="password" id="<%= prefix %>Password" autocomplete="new-password" placeholder="<%= prefix === 'edit' ? '留空表示保持不变' : '' %>"></div>
+</div>
+<div class="credential-group" data-provider-type="uoomsg" style="display:none"><div style="font-size:13px;color:#666;line-height:1.6">uoomsg 不使用 API 登录账号。请在其个人中心创建 API Token 后填入下方。</div></div>
+<div class="form-group"><label>API Token</label><input type="password" name="token" id="<%= prefix %>Token" autocomplete="off" placeholder="<%= prefix === 'edit' ? '留空表示保持不变' : '' %>"><% if (prefix === 'edit') { %><div style="font-size:11px;color:#888;margin-top:4px">为安全起见不会显示现有 Token，只有填写新值时才会替换。</div><% } %></div>
+<div class="form-group"><label>描述</label><input name="description" id="<%= prefix %>ProviderDescription" placeholder="可选"></div>
+<div class="form-group"><label>短信正文显示</label><label style="display:flex;align-items:center;gap:8px;font-weight:400"><input type="checkbox" name="strip_sms_metadata" id="<%= prefix %>StripSmsMetadata" value="1" checked> 自动隐藏服务商附加前缀（如：手机号/0.4/）</label><div style="font-size:11px;color:#888;margin-top:4px">仅影响用户页面显示和保存的短信正文，不影响验证码提取。</div></div>
+<div class="form-group"><label>状态</label><select name="is_active" id="<%= prefix %>ProviderActive"><option value="1">启用</option><option value="0">停用</option></select></div>

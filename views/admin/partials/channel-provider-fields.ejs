@@ -1,0 +1,9 @@
+<div class="provider-fields" data-provider-fields="qc86">
+  <div class="form-group"><label>对接码（channelId）</label><input name="channel_id" id="<%= prefix %>ChannelId" placeholder="从 qc86 项目复制 channelId"><div class="field-hint">只用于 qc86 服务商。</div></div>
+</div>
+<div class="provider-fields" data-provider-fields="uoomsg" style="display:none">
+  <div class="form-group"><label>短信关键词</label><input name="api_keyword" id="<%= prefix %>ApiKeyword" placeholder="例如：验证码短信中的平台名称"><div class="field-hint">uoomsg 根据短信关键词匹配短信，必须与目标短信内容一致。</div></div>
+  <div class="form-group"><label>指定号码（可选）</label><input name="api_phone" id="<%= prefix %>ApiPhone" inputmode="numeric" placeholder="留空则随机取号"><div class="field-hint">只有需要固定某一个号码时填写；指定号段仍使用下面的号段过滤。</div></div>
+  <div class="form-group"><label>省份（可选）</label><input name="api_province" id="<%= prefix %>ApiProvince" placeholder="例如：广东"></div>
+  <div class="form-group"><label>卡类型</label><select name="api_card_type" id="<%= prefix %>ApiCardType"><option value="全部">全部</option><option value="实卡">实卡</option><option value="虚卡">虚卡</option></select></div>
+</div>

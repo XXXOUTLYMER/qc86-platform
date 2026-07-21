@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>账户安全 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'account' }) %>
+  <main class="main account-page">
+    <div class="account-page-heading">
+      <div>
+        <h2>账户安全</h2>
+        <p>使用当前密码验证后，才能更新管理员登录密码。</p>
+      </div>
+      <span class="account-user-badge">管理员：<strong><%= admin.username %></strong></span>
+    </div>
+
+    <% if (success) { %><div class="message message-success"><%= success %></div><% } %>
+    <% if (error) { %><div class="message message-error"><%= error %></div><% } %>
+
+    <section class="account-security-card">
+      <div class="account-security-copy">
+        <span class="account-security-icon" aria-hidden="true">&#128274;</span>
+        <div>
+          <h3>修改登录密码</h3>
+          <p>新密码至少 8 个字符。保存后，之后登录后台请使用新密码。</p>
+        </div>
+      </div>
+      <form action="/admin/account/password" method="POST" class="account-password-form" autocomplete="off">
+        <div class="account-form-field">
+          <label for="currentPassword">当前密码</label>
+          <input id="currentPassword" name="current_password" type="password" required autocomplete="current-password">
+        </div>
+        <div class="account-form-field">
+          <label for="newPassword">新密码</label>
+          <input id="newPassword" name="new_password" type="password" minlength="8" required autocomplete="new-password">
+        </div>
+        <div class="account-form-field">
+          <label for="confirmPassword">确认新密码</label>
+          <input id="confirmPassword" name="confirm_password" type="password" minlength="8" required autocomplete="new-password">
+        </div>
+        <div class="account-form-actions">
+          <button class="btn-apple btn-apple-primary" type="submit">更新密码</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

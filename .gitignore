@@ -1,0 +1,24 @@
+# Runtime secrets and environment-specific configuration
+.env
+.env.*
+!.env.example
+fnos.env
+
+# Persistent production data (kept only on the NAS)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Dependencies, logs and operating-system files
+node_modules/
+logs/
+*.log
+.DS_Store
+
+# Local editor and test artifacts
+.vscode/
+.idea/
+coverage/
+playwright-report/
+test-results/

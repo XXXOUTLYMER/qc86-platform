@@ -1,0 +1,21 @@
+{
+  "name": "qc86-platform",
+  "version": "1.0.0",
+  "description": "卡密接码平台 - 对接qc86.shop API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test:api": "node tests/uoomsg.mock.test.js",
+    "test:card-keys": "node tests/cardKeyCodes.test.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sql.js": "^1.9.0",
+    "express-session": "^1.17.3",
+    "ejs": "^3.1.9",
+    "bcryptjs": "^2.4.3",
+    "axios": "^1.6.2",
+    "uuid": "^9.0.0"
+  }
+}

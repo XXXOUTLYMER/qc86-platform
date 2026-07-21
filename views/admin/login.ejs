@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理员登录 - 卡密接码平台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .login-box { background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); width: 380px; max-width: 90vw; }
+    .login-box h1 { font-size: 22px; text-align: center; margin-bottom: 8px; color: #1a1a2e; }
+    .login-box p { text-align: center; color: #888; font-size: 13px; margin-bottom: 28px; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; font-size: 14px; color: #333; margin-bottom: 6px; }
+    .form-group input { width: 100%; padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; outline: none; transition: border-color .2s; }
+    .form-group input:focus { border-color: #4a6cf7; box-shadow: 0 0 0 2px rgba(74,108,247,0.12); }
+    .error { color: #e74c3c; font-size: 13px; text-align: center; margin-bottom: 14px; padding: 8px 12px; background: #fff0f0; border-radius: 4px; }
+    .btn { width: 100%; padding: 11px; background: #4a6cf7; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; transition: background .2s; }
+    .btn:hover { background: #3b5de7; }
+    /* ===== Mobile Responsive ===== */
+    @media (max-width: 768px) {
+      .login-box { padding: 28px 20px; max-width: 94vw; }
+      .login-box h1 { font-size: 19px; }
+      .login-box p { font-size: 12px; margin-bottom: 22px; }
+      .form-group { margin-bottom: 14px; }
+      .form-group input { padding: 10px 12px; font-size: 15px; }
+      .btn { padding: 12px; font-size: 15px; }
+    }
+    @media (max-width: 480px) {
+      .login-box { padding: 24px 16px; max-width: 96vw; border-radius: 6px; }
+      .login-box h1 { font-size: 17px; }
+      .login-box p { font-size: 12px; margin-bottom: 18px; }
+      body { padding: 10px; }
+    }
+    @media (max-width: 360px) {
+      .login-box { padding: 20px 12px; }
+      .login-box h1 { font-size: 16px; }
+    }
+
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h1>卡密接码平台</h1>
+    <p>管理员登录</p>
+    <% if (error) { %><div class="error"><%= error %></div><% } %>
+    <form method="POST">
+      <div class="form-group">
+        <label for="username">用户名</label>
+        <input type="text" id="username" name="username" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="password">密码</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button type="submit" class="btn">登 录</button>
+    </form>
+  </div>
+</body>
+</html>

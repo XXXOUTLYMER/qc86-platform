@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 - 仪表盘</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'dashboard' }) %>
+  <div class="main">
+    <h2>仪表盘</h2>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-num"><%= channelCount %></div><div class="stat-label">项目数量</div></div>
+      <div class="stat-card"><div class="stat-num"><%= cardTotal %></div><div class="stat-label">卡密总数</div></div>
+      <div class="stat-card"><div class="stat-num"><%= cardUnused %></div><div class="stat-label">未使用</div></div>
+      <div class="stat-card"><div class="stat-num"><%= cardUsed %></div><div class="stat-label">已使用</div></div>
+      <div class="stat-card"><div class="stat-num"><%= recordToday %></div><div class="stat-label">今日使用次数</div></div>
+    </div>
+    <div style="margin-top:30px">
+      <h3>快速入口</h3>
+      <div class="quick-links">
+        <a href="/admin/channels" class="quick-link"><div>📡</div><div>项目管理</div></a>
+        <a href="/admin/cards" class="quick-link"><div>🎴</div><div>卡密管理</div></a>
+        <a href="/admin/api-providers#platform-settings" class="quick-link"><div>⚙️</div><div>API 对接与设置</div></a>
+        <a href="/admin/records" class="quick-link"><div>📋</div><div>使用记录</div></a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

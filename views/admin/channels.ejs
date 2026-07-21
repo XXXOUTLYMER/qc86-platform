@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>项目管理 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .provider-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;background:#eef6ff;color:#1769aa;font-size:12px;font-weight:600}
+    .provider-fields{padding:12px;background:#f7f8fa;border:1px solid #e8eaed;border-radius:6px;margin-bottom:14px}
+    .field-hint{font-size:12px;color:#888;margin-top:5px;line-height:1.5}
+    .prefix-filter-disabled{display:none}
+  </style>
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'channels' }) %>
+  <div class="main">
+    <h2>项目管理</h2>
+    <p style="color:#888;font-size:13px;margin-bottom:16px">每个项目独立绑定 API 服务商。生成卡密后，系统会按照项目自动选择对应接口。</p>
+
+    <% if (typeof success !== 'undefined' && success) { %><div class="message message-success"><%= success %></div><% } %>
+    <% if (typeof error !== 'undefined' && error) { %><div class="message message-error"><%= error %></div><% } %>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-body">
+        <h3 style="margin-bottom:8px">从 qc86 API JSON 导入</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:10px">粘贴 qc86 的复制 API JSON，系统会自动绑定原有 qc86 服务商。</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
+          <textarea id="apiJsonInput" rows="3" style="flex:1;min-width:240px" placeholder='{"channelId":"...","code":"..."}'></textarea>
+          <button type="button" class="btn btn-success" onclick="importFromJson()">解析并导入</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-primary" onclick="openAddModal()">+ 添加项目</button>
+      <a class="btn btn-cancel" href="/admin/api-providers">管理 API 服务商</a>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>项目名称</th><th>API 服务商</th><th>接口项目参数</th><th>号段过滤</th><th>号段列表</th><th>最多请求</th><th>间隔</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody>
+              <% if (!channels.length) { %><tr><td colspan="10" class="empty">暂无项目，请添加</td></tr><% } %>
+              <% channels.forEach(function(ch) { %>
+              <tr>
+                <td data-label="ID"><%= ch.id %></td>
+                <td data-label="项目名称"><strong><%= ch.name %></strong></td>
+                <td data-label="API 服务商"><span class="provider-badge"><%= ch.provider_name || '原有 qc86' %></span></td>
+                <td data-label="接口项目参数" style="font-size:12px">
+                  <% if (ch.provider_type === 'uoomsg') { %>关键词：<%= ch.api_keyword || '-' %><% } else { %><span style="font-family:monospace"><%= ch.channel_id || '-' %></span><% } %>
+                </td>
+                <% var filterMode = ch.prefix_filter_mode === 'exclude' ? 'exclude' : (Number(ch.prefix_enabled) === 0 ? 'disabled' : 'include'); %>
+                <td data-label="号段过滤"><span class="badge <%= filterMode === 'disabled' ? 'badge-inactive' : 'badge-active' %>"><%= filterMode === 'exclude' ? '排除' : (filterMode === 'include' ? '指定' : '关闭') %></span></td>
+                <td data-label="号段列表"><%= filterMode === 'disabled' ? '-' : (ch.prefix || '-') %></td>
+                <td data-label="最多请求"><%= Math.min(20, Math.max(1, parseInt(ch.prefix_max_requests, 10) || 20)) %> 次</td>
+                <td data-label="间隔"><%= (Math.min(10000, Math.max(500, parseInt(ch.prefix_request_interval_ms, 10) || 500)) / 1000).toFixed(1).replace(/\.0$/, '') %> 秒</td>
+                <td data-label="状态"><span class="badge <%= ch.is_active ? 'badge-active' : 'badge-inactive' %>"><%= ch.is_active ? '启用' : '停用' %></span></td>
+                <td data-label="操作">
+                  <button class="btn btn-primary btn-sm" data-channel="<%= encodeURIComponent(JSON.stringify(ch)) %>" onclick="openEditModal(this)">编辑</button>
+                  <form method="POST" action="/admin/channels/delete/<%= ch.id %>" style="display:inline" onsubmit="return confirm('确定删除这个项目吗？')"><button class="btn btn-danger btn-sm">删除</button></form>
+                </td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="addModal">
+    <div class="modal-box">
+      <h3>添加项目</h3>
+      <form method="POST" action="/admin/channels/add" class="channel-form">
+        <div class="form-group"><label>项目名称</label><input name="name" required placeholder="例如：平台注册"></div>
+        <div class="form-group"><label>API 服务商</label><select name="provider_id" class="provider-select" required onchange="syncProviderFields(this)"><% providers.forEach(function(p) { %><option value="<%= p.id %>" data-type="<%= p.provider_type %>"><%= p.name %>（<%= p.provider_type %>）</option><% }); %></select></div>
+        <%- include('partials/channel-provider-fields', { prefix: 'add' }) %>
+        <%- include('partials/channel-common-fields', { prefix: 'add' }) %>
+        <div class="modal-actions"><button type="button" class="btn btn-cancel" onclick="closeModal('addModal')">取消</button><button class="btn btn-primary">保存</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+      <h3>编辑项目</h3>
+      <form method="POST" id="editForm" class="channel-form">
+        <div class="form-group"><label>项目名称</label><input name="name" id="editName" required></div>
+        <div class="form-group"><label>API 服务商</label><select name="provider_id" id="editProviderId" class="provider-select" required onchange="syncProviderFields(this)"><% providers.forEach(function(p) { %><option value="<%= p.id %>" data-type="<%= p.provider_type %>"><%= p.name %>（<%= p.provider_type %>）</option><% }); %></select></div>
+        <%- include('partials/channel-provider-fields', { prefix: 'edit' }) %>
+        <%- include('partials/channel-common-fields', { prefix: 'edit' }) %>
+        <div class="form-group"><label>状态</label><select name="is_active" id="editActive"><option value="1">启用</option><option value="0">停用</option></select></div>
+        <div class="modal-actions"><button type="button" class="btn btn-cancel" onclick="closeModal('editModal')">取消</button><button class="btn btn-primary">保存</button></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function syncProviderFields(select) {
+      var form = select.closest('form');
+      var type = select.options[select.selectedIndex] ? select.options[select.selectedIndex].dataset.type : 'qc86';
+      form.querySelectorAll('[data-provider-fields]').forEach(function(box) { box.style.display = box.dataset.providerFields === type ? 'block' : 'none'; });
+      var channelId = form.querySelector('[name="channel_id"]');
+      var keyword = form.querySelector('[name="api_keyword"]');
+      if (channelId) channelId.required = type === 'qc86';
+      if (keyword) keyword.required = type === 'uoomsg';
+    }
+    function syncPrefixFilterFields(select) {
+      var form = select.closest('form');
+      var mode = select.value || 'include';
+      var isDisabled = mode === 'disabled';
+      form.querySelectorAll('.prefix-filter-dependent').forEach(function(box) {
+        box.classList.toggle('prefix-filter-disabled', isDisabled);
+      });
+      var label = form.querySelector('[id$="PrefixLabel"]');
+      var hint = form.querySelector('[id$="PrefixHint"]');
+      if (label) label.textContent = mode === 'exclude' ? '排除号段' : '指定号段';
+      if (hint) hint.textContent = mode === 'exclude'
+        ? '命中任一填写号段的号码会被记录、延迟释放，并继续逐个申请。支持逗号、空格或中文逗号分隔。'
+        : '仅保留以任一填写号段开头的号码。支持逗号、空格或中文逗号分隔。';
+    }
+    function openAddModal() {
+      var modal = document.getElementById('addModal');
+      modal.classList.add('show');
+      syncProviderFields(modal.querySelector('.provider-select'));
+      syncPrefixFilterFields(document.getElementById('addPrefixFilterMode'));
+    }
+    function openEditModal(button) {
+      var ch = JSON.parse(decodeURIComponent(button.dataset.channel));
+      var form = document.getElementById('editForm');
+      form.action = '/admin/channels/edit/' + ch.id;
+      document.getElementById('editName').value = ch.name || '';
+      document.getElementById('editProviderId').value = ch.provider_id || '';
+      document.getElementById('editChannelId').value = ch.channel_id || '';
+      document.getElementById('editApiKeyword').value = ch.api_keyword || '';
+      document.getElementById('editApiPhone').value = ch.api_phone || '';
+      document.getElementById('editApiProvince').value = ch.api_province || '';
+      document.getElementById('editApiCardType').value = ch.api_card_type || '全部';
+      document.getElementById('editScope').value = ch.scope || '';
+      document.getElementById('editPrefix').value = ch.prefix || '';
+      document.getElementById('editPrefixFilterMode').value = ch.prefix_filter_mode === 'exclude' ? 'exclude' : (Number(ch.prefix_enabled) === 0 ? 'disabled' : 'include');
+      document.getElementById('editPrefixMaxRequests').value = Math.min(20, Math.max(1, Number(ch.prefix_max_requests) || 20));
+      document.getElementById('editPrefixRequestInterval').value = Math.min(10, Math.max(0.5, (Number(ch.prefix_request_interval_ms) || 500) / 1000));
+      document.getElementById('editOperator').value = ch.operator || 0;
+      document.getElementById('editDescription').value = ch.description || '';
+      document.getElementById('editActive').value = ch.is_active ? '1' : '0';
+      syncProviderFields(document.getElementById('editProviderId'));
+      syncPrefixFilterFields(document.getElementById('editPrefixFilterMode'));
+      document.getElementById('editModal').classList.add('show');
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+    function importFromJson() {
+      var raw = document.getElementById('apiJsonInput').value.trim();
+      if (!raw) return alert('请先粘贴 API JSON');
+      try {
+        var data = JSON.parse(raw);
+        if (!data.channelId) return alert('JSON 中没有找到 channelId');
+        openAddModal();
+        var form = document.querySelector('#addModal form');
+        var providerSelect = form.querySelector('[name="provider_id"]');
+        var qcOption = Array.from(providerSelect.options).find(function(option) { return option.dataset.type === 'qc86'; });
+        if (qcOption) providerSelect.value = qcOption.value;
+        syncProviderFields(providerSelect);
+        form.querySelector('[name="name"]').value = data.name || data.code || 'qc86 项目';
+        form.querySelector('[name="channel_id"]').value = data.channelId;
+        form.querySelector('[name="description"]').value = data.code ? '渠道代码:' + data.code : '';
+      } catch (error) { alert('JSON 解析失败: ' + error.message); }
+    }
+  </script>
+</body>
+</html>

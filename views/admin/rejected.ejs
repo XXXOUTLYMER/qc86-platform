@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>号段过滤 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .rejected-page { max-width: 1180px; }
+    .rejected-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .rejected-heading h2 { margin: 0 0 7px; color: #1d1d1f; }
+    .rejected-description {
+      max-width: 680px;
+      color: #77777c;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .release-all-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 38px;
+      padding: 8px 15px;
+      border: 0;
+      border-radius: 8px;
+      background: #1d1d1f;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .18s ease, transform .18s ease, opacity .18s ease;
+    }
+    .release-all-btn:hover { background: #353538; }
+    .release-all-btn:active { transform: scale(.98); }
+    .release-all-btn:disabled { opacity: .38; cursor: not-allowed; transform: none; }
+    .release-all-btn .button-icon { font-size: 16px; line-height: 1; }
+
+    .rejected-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .rejected-stat {
+      min-width: 0;
+      padding: 16px 18px;
+      border: 1px solid rgba(0, 0, 0, .055);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .035);
+    }
+    .rejected-stat-label {
+      margin-bottom: 6px;
+      color: #86868b;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .rejected-stat-value {
+      color: #1d1d1f;
+      font-size: 25px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .rejected-stat.pending .rejected-stat-value { color: #d97706; }
+    .rejected-stat.released .rejected-stat-value { color: #248a3d; }
+
+    .records-panel {
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, .055);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .04);
+    }
+    .records-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #ededf0;
+    }
+    .status-filter {
+      display: inline-flex;
+      gap: 3px;
+      padding: 3px;
+      border-radius: 8px;
+      background: #f2f2f7;
+    }
+    .status-filter button {
+      min-height: 30px;
+      padding: 5px 11px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #68686d;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+    }
+    .status-filter button:hover { color: #1d1d1f; }
+    .status-filter button.active {
+      background: #fff;
+      color: #1d1d1f;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .1);
+    }
+    .records-search {
+      position: relative;
+      width: min(280px, 100%);
+    }
+    .records-search span {
+      position: absolute;
+      top: 50%;
+      left: 11px;
+      color: #9a9aa0;
+      font-size: 14px;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .records-search input {
+      width: 100%;
+      height: 34px;
+      padding: 7px 12px 7px 32px;
+      border: 1px solid #dedee3;
+      border-radius: 8px;
+      outline: none;
+      background: #fafafa;
+      color: #1d1d1f;
+      font-size: 13px;
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    .records-search input:focus {
+      border-color: #8e8e93;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, .06);
+    }
+
+    .rejected-table { width: 100%; }
+    .rejected-table thead th {
+      padding: 11px 14px;
+      border-bottom: 1px solid #ededf0;
+      background: #fafafa;
+      color: #86868b;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .rejected-table tbody td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #f1f1f3;
+      vertical-align: middle;
+    }
+    .rejected-table tbody tr:last-child td { border-bottom: 0; }
+    .rejected-table tbody tr:hover { background: #fafafa; }
+    .record-id { color: #aaaab0; font-size: 11px; }
+    .record-phone {
+      color: #1d1d1f;
+      font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
+      font-size: 13px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .record-project {
+      display: inline-flex;
+      max-width: 170px;
+      padding: 4px 9px;
+      overflow: hidden;
+      border-radius: 6px;
+      background: #f2f2f7;
+      color: #46464b;
+      font-size: 12px;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .record-reason { color: #66666b; font-size: 12px; }
+    .record-time { color: #86868b; font-size: 11px; white-space: nowrap; }
+    .release-time { display: block; margin-top: 3px; color: #aaaab0; font-size: 10px; }
+    .release-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .release-status::before {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      content: '';
+    }
+    .release-status.is-released { background: rgba(52, 199, 89, .11); color: #248a3d; }
+    .release-status.is-released::before { background: #34c759; }
+    .release-status.is-pending { background: rgba(255, 149, 0, .12); color: #b25f00; }
+    .release-status.is-pending::before { background: #ff9500; box-shadow: 0 0 0 3px rgba(255, 149, 0, .12); }
+    .release-one-btn {
+      min-height: 30px;
+      padding: 5px 11px;
+      border: 1px solid #d9d9de;
+      border-radius: 7px;
+      background: #fff;
+      color: #1d1d1f;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, opacity .15s ease;
+    }
+    .release-one-btn:hover { border-color: #b8b8bd; background: #f5f5f7; }
+    .release-one-btn:disabled { opacity: .45; cursor: wait; }
+    .released-note { color: #aaaab0; font-size: 11px; }
+    .empty-panel {
+      padding: 64px 20px;
+      text-align: center;
+      color: #86868b;
+    }
+    .empty-panel-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      margin: 0 auto 12px;
+      border-radius: 10px;
+      background: #f2f2f7;
+      color: #8e8e93;
+      font-size: 20px;
+    }
+    .empty-panel strong { display: block; margin-bottom: 5px; color: #45454a; font-size: 14px; }
+    .empty-panel span { font-size: 12px; }
+    .no-results { display: none; }
+
+    .page-toast {
+      position: fixed;
+      top: 68px;
+      left: 50%;
+      z-index: 999;
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: #1d1d1f;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, -8px);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .page-toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .page-toast.error { background: #c9342f; }
+
+    @media (max-width: 768px) {
+      .rejected-heading { align-items: stretch; flex-direction: column; gap: 14px; }
+      .release-all-btn { width: 100%; min-height: 42px; }
+      .rejected-stats { gap: 8px; }
+      .rejected-stat { padding: 13px 12px; }
+      .rejected-stat-value { font-size: 21px; }
+      .records-controls { align-items: stretch; flex-direction: column; }
+      .status-filter { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+      .records-search { width: 100%; }
+      .records-search input { height: 40px; font-size: 16px; }
+
+      .rejected-table thead { display: none; }
+      .rejected-table tbody { display: block; padding: 8px; }
+      .rejected-table tbody tr {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 7px 14px;
+        margin-bottom: 8px;
+        padding: 13px;
+        border: 1px solid #ededf0;
+        border-radius: 8px;
+        background: #fff;
+      }
+      .rejected-table tbody tr:last-child { margin-bottom: 0; }
+      .rejected-table tbody tr:hover { background: #fff; }
+      .rejected-table tbody td {
+        display: block;
+        padding: 0;
+        border: 0;
+      }
+      .rejected-table tbody td::before { display: none; }
+      .rejected-table .cell-id { display: none; }
+      .rejected-table .cell-phone { grid-column: 1; grid-row: 1; }
+      .rejected-table .cell-status { grid-column: 2; grid-row: 1; text-align: right; }
+      .rejected-table .cell-project { grid-column: 1 / -1; grid-row: 2; }
+      .rejected-table .cell-reason { grid-column: 1 / -1; grid-row: 3; }
+      .rejected-table .cell-time { grid-column: 1; grid-row: 4; }
+      .rejected-table .cell-action { grid-column: 2; grid-row: 4; text-align: right; }
+      .record-project { max-width: 100%; }
+      .release-one-btn { min-height: 32px; }
+    }
+
+    @media (max-width: 420px) {
+      .rejected-page { padding-right: 10px; padding-left: 10px; }
+      .rejected-stats { grid-template-columns: 1fr 1fr; }
+      .rejected-stat:first-child { grid-column: 1 / -1; }
+      .rejected-stat { padding: 12px 14px; }
+      .records-controls { padding: 12px; }
+      .rejected-table tbody { padding: 7px; }
+      .rejected-table tbody tr { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'rejected' }) %>
+  <%
+    var totalCount = rejected.length;
+    var pendingCount = rejected.filter(function(record) { return !record.released; }).length;
+    var releasedCount = totalCount - pendingCount;
+  %>
+  <main class="main rejected-page">
+    <div class="rejected-heading">
+      <div>
+        <h2>号段过滤</h2>
+        <p class="rejected-description">不符合指定号段的号码会进入这里，并由系统自动延迟释放。你可以查看处理状态，也可以手动释放仍在等待中的号码。</p>
+      </div>
+      <button class="release-all-btn" id="releaseAllBtn" type="button" onclick="releaseAll(this)" <%= pendingCount === 0 ? 'disabled' : '' %>>
+        <span class="button-icon" aria-hidden="true">↻</span>
+        <span>释放全部待处理号码</span>
+      </button>
+    </div>
+
+    <section class="rejected-stats" aria-label="号段过滤统计">
+      <div class="rejected-stat">
+        <div class="rejected-stat-label">全部记录</div>
+        <div class="rejected-stat-value"><%= totalCount %></div>
+      </div>
+      <div class="rejected-stat pending">
+        <div class="rejected-stat-label">等待释放</div>
+        <div class="rejected-stat-value"><%= pendingCount %></div>
+      </div>
+      <div class="rejected-stat released">
+        <div class="rejected-stat-label">已释放</div>
+        <div class="rejected-stat-value"><%= releasedCount %></div>
+      </div>
+    </section>
+
+    <section class="records-panel">
+      <% if (totalCount === 0) { %>
+        <div class="empty-panel">
+          <div class="empty-panel-icon" aria-hidden="true">✓</div>
+          <strong>暂无过滤记录</strong>
+          <span>不符合指定号段的号码会显示在这里。</span>
+        </div>
+      <% } else { %>
+        <div class="records-controls">
+          <div class="status-filter" role="group" aria-label="记录状态筛选">
+            <button type="button" class="active" data-filter="all" onclick="setFilter(this, 'all')">全部 <%= totalCount %></button>
+            <button type="button" data-filter="pending" onclick="setFilter(this, 'pending')">待释放 <%= pendingCount %></button>
+            <button type="button" data-filter="released" onclick="setFilter(this, 'released')">已释放 <%= releasedCount %></button>
+          </div>
+          <label class="records-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="recordSearch" type="search" placeholder="搜索手机号或项目" autocomplete="off" oninput="applyFilters()">
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table class="rejected-table">
+            <thead>
+              <tr>
+                <th>记录</th>
+                <th>手机号</th>
+                <th>所属项目</th>
+                <th>过滤原因</th>
+                <th>处理时间</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="recordRows">
+              <% rejected.forEach(function(r) { %>
+              <tr data-status="<%= r.released ? 'released' : 'pending' %>" data-search="<%= String(r.phone_number || '') + ' ' + String(r.channel_name || '') + ' ' + String(r.reason || '') %>">
+                <td class="cell-id" data-label="记录"><span class="record-id">#<%= r.id %></span></td>
+                <td class="cell-phone" data-label="手机号"><span class="record-phone"><%= r.phone_number %></span></td>
+                <td class="cell-project" data-label="所属项目"><span class="record-project"><%= r.channel_name || '未命名项目' %></span></td>
+                <td class="cell-reason" data-label="过滤原因"><span class="record-reason"><%= r.reason || '号段不匹配' %></span></td>
+                <td class="cell-time" data-label="处理时间">
+                  <span class="record-time"><%= r.rejected_at %></span>
+                  <% if (r.released && r.released_at) { %><span class="release-time">释放于 <%= r.released_at %></span><% } %>
+                </td>
+                <td class="cell-status" data-label="状态">
+                  <span class="release-status <%= r.released ? 'is-released' : 'is-pending' %>"><%= r.released ? '已释放' : '待释放' %></span>
+                </td>
+                <td class="cell-action" data-label="操作">
+                  <% if (!r.released) { %>
+                    <button class="release-one-btn" type="button" onclick="releaseOne(<%= r.id %>, this)">立即释放</button>
+                  <% } else { %>
+                    <span class="released-note">已处理</span>
+                  <% } %>
+                </td>
+              </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <div class="empty-panel no-results" id="noResults">
+          <div class="empty-panel-icon" aria-hidden="true">⌕</div>
+          <strong>没有匹配的记录</strong>
+          <span>换一个手机号、项目名称或状态试试。</span>
+        </div>
+      <% } %>
+    </section>
+  </main>
+
+  <div class="page-toast" id="pageToast" role="status" aria-live="polite"></div>
+
+  <script>
+    var activeFilter = 'all';
+
+    function showToast(message, isError) {
+      var toast = document.getElementById('pageToast');
+      if (!toast) return;
+      toast.textContent = message;
+      toast.classList.toggle('error', Boolean(isError));
+      toast.classList.add('show');
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(function() { toast.classList.remove('show'); }, 2200);
+    }
+
+    function setFilter(button, filter) {
+      activeFilter = filter;
+      document.querySelectorAll('.status-filter button').forEach(function(item) {
+        item.classList.toggle('active', item === button);
+      });
+      applyFilters();
+    }
+
+    function applyFilters() {
+      var searchInput = document.getElementById('recordSearch');
+      var keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
+      var visibleCount = 0;
+      document.querySelectorAll('#recordRows tr').forEach(function(row) {
+        var matchesStatus = activeFilter === 'all' || row.dataset.status === activeFilter;
+        var matchesSearch = !keyword || String(row.dataset.search || '').toLowerCase().includes(keyword);
+        var visible = matchesStatus && matchesSearch;
+        row.style.display = visible ? '' : 'none';
+        if (visible) visibleCount += 1;
+      });
+      var noResults = document.getElementById('noResults');
+      var tableWrap = document.querySelector('.records-panel .table-wrap');
+      if (noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+      if (tableWrap) tableWrap.style.display = visibleCount === 0 ? 'none' : 'block';
+    }
+
+    function releaseOne(id, button) {
+      if (!confirm('确认立即释放这个号码？')) return;
+      button.disabled = true;
+      button.textContent = '释放中…';
+      fetch('/admin/rejected/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+      })
+      .then(function(response) { return response.json(); })
+      .then(function(data) {
+        if (!data.success) throw new Error(data.error || '未知错误');
+        showToast('号码已释放');
+        window.setTimeout(function() { location.reload(); }, 450);
+      })
+      .catch(function(error) {
+        button.disabled = false;
+        button.textContent = '立即释放';
+        showToast('释放失败：' + error.message, true);
+      });
+    }
+
+    function releaseAll(button) {
+      if (!confirm('确认释放全部待处理号码？')) return;
+      button.disabled = true;
+      var label = button.querySelector('span:last-child');
+      label.textContent = '正在释放…';
+      fetch('/admin/rejected/release-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(function(response) { return response.json(); })
+      .then(function(data) {
+        if (!data.success) throw new Error(data.error || '未知错误');
+        showToast('已释放 ' + data.count + ' 个号码');
+        window.setTimeout(function() { location.reload(); }, 550);
+      })
+      .catch(function(error) {
+        button.disabled = false;
+        label.textContent = '释放全部待处理号码';
+        showToast('释放失败：' + error.message, true);
+      });
+    }
+  </script>
+</body>
+</html>

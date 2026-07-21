@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>卡密管理 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'cards' }) %>
+  <div class="main">
+    <div class="cards-page-heading">
+      <div>
+        <h2>卡密管理</h2>
+        <p>生成、筛选、复制与批量管理都集中在这里。</p>
+      </div>
+      <div class="cards-page-count">当前显示 <strong><%= cards.length %></strong> 张</div>
+    </div>
+
+    <% if (typeof success !== 'undefined' && success) { %><div class="message message-success"><%= success %></div><% } %>
+    <% if (typeof error !== 'undefined' && error) { %><div class="message message-error"><%= error %></div><% } %>
+
+    <%
+      var stats = (typeof totalStats !== 'undefined' && totalStats) ? totalStats : { total: cards.length, unused: 0, used: 0, expired: 0 };
+      stats.total = stats.total || 0;
+      stats.unused = stats.unused || 0;
+      stats.used = stats.used || 0;
+      stats.expired = stats.expired || 0;
+      var currentStatus = typeof statusFilter !== 'undefined' ? statusFilter : 'all';
+      var currentSearch = typeof searchQuery !== 'undefined' ? searchQuery : '';
+      var querySuffix = currentSearch ? '&q=' + encodeURIComponent(currentSearch) : '';
+    %>
+    <div class="stats-summary">
+      <a class="stat-item <%= currentStatus === 'all' ? 'active' : '' %>" href="/admin/cards<%= currentSearch ? '?q=' + encodeURIComponent(currentSearch) : '' %>">
+        <div class="stat-value"><%= stats.total %></div>
+        <div class="stat-label">全部</div>
+      </a>
+      <a class="stat-item stat-unused <%= currentStatus === 'unused' ? 'active' : '' %>" href="/admin/cards?status=unused<%= querySuffix %>">
+        <div class="stat-value" style="color:#34c759"><%= stats.unused %></div>
+        <div class="stat-label">未使用</div>
+      </a>
+      <a class="stat-item stat-used <%= currentStatus === 'used' ? 'active' : '' %>" href="/admin/cards?status=used<%= querySuffix %>">
+        <div class="stat-value" style="color:#ff3b30"><%= stats.used %></div>
+        <div class="stat-label">已使用</div>
+      </a>
+      <a class="stat-item stat-expired <%= currentStatus === 'expired' ? 'active' : '' %>" href="/admin/cards?status=expired<%= querySuffix %>">
+        <div class="stat-value" style="color:#ff9500"><%= stats.expired %></div>
+        <div class="stat-label">已过期</div>
+      </a>
+    </div>
+
+    <div class="cards-filter-panel">
+      <div class="filter-bar" aria-label="卡密状态筛选">
+        <a class="filter-chip <%= currentStatus === 'all' ? 'active' : '' %>" href="/admin/cards<%= currentSearch ? '?q=' + encodeURIComponent(currentSearch) : '' %>">全部 <span><%= stats.total %></span></a>
+        <a class="filter-chip <%= currentStatus === 'unused' ? 'active' : '' %>" href="/admin/cards?status=unused<%= querySuffix %>">未使用 <span><%= stats.unused %></span></a>
+        <a class="filter-chip <%= currentStatus === 'used' ? 'active' : '' %>" href="/admin/cards?status=used<%= querySuffix %>">已使用 <span><%= stats.used %></span></a>
+        <a class="filter-chip <%= currentStatus === 'expired' ? 'active' : '' %>" href="/admin/cards?status=expired<%= querySuffix %>">已过期 <span><%= stats.expired %></span></a>
+      </div>
+      <form class="cards-search" method="GET" action="/admin/cards">
+        <% if (currentStatus !== 'all') { %><input type="hidden" name="status" value="<%= currentStatus %>"><% } %>
+        <label class="sr-only" for="cardSearch">搜索卡密</label>
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="cardSearch" name="q" value="<%= currentSearch %>" maxlength="80" placeholder="搜索卡密、手机号、项目或备注">
+        <% if (currentSearch) { %><a class="cards-search-clear" href="/admin/cards<%= currentStatus !== 'all' ? '?status=' + currentStatus : '' %>" aria-label="清除搜索">×</a><% } %>
+        <button type="submit" class="btn-apple btn-apple-secondary">搜索</button>
+      </form>
+    </div>
+
+    <div class="premium-generate-panel">
+      <div class="panel-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#007AFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div><span>生成新卡密</span><small>选择项目后生成，可随时用筛选找到对应批次。</small></div>
+      </div>
+      <form method="POST" action="/admin/cards/generate" id="generateForm">
+        <div class="form-row-apple">
+          <div class="form-group-apple field-count">
+            <label>生成数量</label>
+            <input type="number" name="count" value="10" min="1" max="1000" required>
+          </div>
+          <div class="form-group-apple field-attempts">
+            <label>最大获取次数</label>
+            <input type="number" name="max_attempts" value="3" min="1" max="20">
+          </div>
+          <div class="form-group-apple field-test">
+            <span class="form-field-label">卡密类型</span>
+            <label class="test-option" for="testCardCheck">
+              <span class="test-option-label">测试卡密</span>
+              <input type="checkbox" name="is_test" value="1" id="testCardCheck">
+              <span class="test-option-switch" aria-hidden="true"></span>
+            </label>
+          </div>
+          <div class="form-group-apple field-remark">
+            <label>备注（可选）</label>
+            <input name="remark" placeholder="批次备注">
+          </div>
+          <div class="form-group-apple field-channel">
+            <label>选择项目</label>
+            <select name="channel_id" <%= typeof channels !== 'undefined' && channels.length > 0 ? 'required' : '' %>>
+              <% if (typeof channels !== 'undefined' && channels.length > 0) { %>
+                <% channels.forEach(function(ch) { %>
+                  <option value="<%= ch.id %>" <%= typeof defaultChannel !== 'undefined' && String(defaultChannel) === String(ch.id) ? 'selected' : '' %>><%= ch.name %></option>
+                <% }); %>
+              <% } else { %>
+                <option value="">-- 暂无项目，请先在项目管理中添加 --</option>
+              <% } %>
+            </select>
+          </div>
+          <div class="form-group-apple field-submit">
+            <button type="submit" class="btn-apple btn-apple-primary">生成卡密</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="premium-generate-panel cards-list-panel">
+      <div class="batch-bar">
+        <div class="batch-selection">
+          <label class="check-apple">
+          <input type="checkbox" id="selectAll" onchange="toggleAll()">
+          <span class="checkmark"></span>
+          <span class="batch-label">全选当前列表</span>
+          </label>
+          <span id="selectedCount" class="batch-count" aria-live="polite">未选择卡密</span>
+          <button type="button" id="clearSelectionBtn" class="selection-clear" onclick="clearSelection()" disabled>清空</button>
+        </div>
+        <div class="batch-actions">
+          <button type="button" class="btn-apple btn-apple-sm btn-apple-secondary" onclick="batchExport()" data-selection-action disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            复制卡密
+          </button>
+          <button type="button" class="btn-apple btn-apple-sm btn-apple-secondary" onclick="batchExportLinks()" data-selection-action disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            复制链接
+          </button>
+          <button type="button" class="btn-apple btn-apple-sm btn-apple-danger" onclick="batchDelete()" data-selection-action disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            删除
+          </button>
+        </div>
+        <span class="cards-list-hint">按住 Shift 可连续选择</span>
+      </div>
+
+      <div class="table-wrap cards-table-wrap">
+        <table class="table-apple">
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox" id="selectAllHead" onchange="toggleAllHead(this)" class="check-apple-head"></th>
+              <th>ID</th>
+              <th>卡密</th>
+              <th>项目</th>
+              <th>状态</th>
+              <th style="text-align:center">次数</th>
+              <th>手机号</th>
+              <th>验证码</th>
+              <th>号段要求</th>
+              <th>时间</th>
+              <th style="text-align:center">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (cards.length === 0) { %>
+            <tr class="cards-empty-row"><td colspan="11" class="empty">暂无卡密</td></tr>
+            <% } else { cards.forEach(function(c) { %>
+            <%
+              var displayStatus = c.display_status || c.status || 'unused';
+              var statusText = {'unused':'未使用','used':'已使用','expired':'已过期'}[displayStatus] || displayStatus;
+              var statusNote = {
+                'unused': '可继续获取号码',
+                'used': c.sms_code ? '已收到验证码，不可继续取号' : '获取次数已用完，不可继续取号',
+                'expired': '已失效，不可继续取号'
+              }[displayStatus] || '';
+            %>
+            <tr id="card-row-<%= c.id %>">
+              <td class="card-select-cell" data-label="选择"><label class="check-apple card-select-control"><input type="checkbox" class="card-check" value="<%= c.id %>" aria-label="选择卡密 <%= c.code %>"><span class="card-select-text">选择</span></label></td>
+              <td data-label="ID"><%= c.id %></td>
+              <td data-label="卡密">
+                <div class="card-code-group">
+                  <span class="card-code"><%= c.code %></span>
+                  <span class="action-group">
+                    <button type="button" class="action-btn" data-code="<%= c.code %>" onclick="copyText(this.dataset.code)" title="复制卡密">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                    <button type="button" class="action-btn" data-code="<%= c.code %>" onclick="copyLink(this.dataset.code)" title="复制链接">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </button>
+                  </span>
+                </div>
+              </td>
+              <td data-label="项目"><span class="project-pill"><%= c.channel_name || '-' %></span></td>
+              <td data-label="状态">
+                <div class="card-status-stack">
+                  <span class="badge-apple badge-apple-<%= displayStatus %>"><%= statusText %></span>
+                  <span class="card-status-note"><%= statusNote %></span>
+                </div>
+                <% if (c.is_test) { %>
+                <span class="tag-test" style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:rgba(175,82,222,0.12);color:#af52de;border-radius:20px;font-size:10px;font-weight:600;margin-left:4px">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                  测试
+                </span>
+                <% } %>
+              </td>
+              <td data-label="次数" style="text-align:center">
+                <div class="attempts-cell"><strong><%= c.attempts || 0 %></strong>/<%= c.max_attempts || 3 %></div>
+                <span class="attempts-note"><%= displayStatus === 'used' && !c.sms_code ? '次数已用完' : '已用 / 上限' %></span>
+              </td>
+              <td data-label="手机号"><div class="card-value-with-copy"><span class="card-phone"><%= c.phone_number || '-' %></span><% if (c.phone_number) { %><button type="button" class="action-btn action-btn-inline" data-phone="<%= c.phone_number %>" onclick="copyText(this.dataset.phone, '手机号已复制')" title="复制手机号" aria-label="复制手机号"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><% } %></div></td>
+              <td data-label="验证码"><span class="card-sms"><%= c.sms_code || '-' %></span></td>
+              <td data-label="号段要求"><%= c.channel_prefix ? c.channel_prefix : '-' %></td>
+              <td data-label="时间" class="card-time"><%= c.created_at %></td>
+              <td data-label="操作" style="text-align:center">
+                <div class="row-actions">
+                  <button type="button" class="btn-apple btn-apple-xs btn-apple-secondary" onclick="openAttemptsModal(this)"
+                    data-id="<%= c.id %>" data-code="<%= c.code %>" data-attempts="<%= c.attempts || 0 %>" data-max-attempts="<%= c.max_attempts || 3 %>" data-has-sms="<%= c.sms_code ? '1' : '0' %>" title="调整取号次数">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    <span class="action-btn-label">次数</span>
+                  </button>
+                  <% if (c.phone_number) { %>
+                  <button class="btn-apple btn-apple-xs btn-apple-secondary" onclick="checkPrefix(<%= c.id %>)" id="prefix-btn-<%= c.id %>" title="检查号段">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    <span class="action-btn-label">号段</span>
+                  </button>
+                  <button class="btn-apple btn-apple-xs btn-apple-secondary" onclick="releasePhone(<%= c.id %>)" id="release-btn-<%= c.id %>">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    <span class="action-btn-label">换号</span>
+                  </button>
+                  <% } %>
+                  <form method="POST" action="/admin/cards/delete/<%= c.id %>" style="display:inline" onsubmit="return confirm('确定删除该卡密？')">
+                    <button type="submit" class="btn-apple btn-apple-xs btn-apple-danger" aria-label="删除卡密" title="删除卡密">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            <% }) } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <div class="modal-overlay" id="attemptsModal" aria-hidden="true">
+    <div class="modal-box attempts-modal-box" role="dialog" aria-modal="true" aria-labelledby="attemptsModalTitle">
+      <h3 id="attemptsModalTitle">调整卡密次数</h3>
+      <p class="attempts-modal-code" id="attemptsModalCode"></p>
+      <p class="attempts-modal-help" id="attemptsModalHelp">调整后会立即重新判断卡密状态。</p>
+      <form method="POST" id="attemptsForm">
+        <div class="form-group">
+          <label for="attemptsInput">已使用次数</label>
+          <input id="attemptsInput" type="number" name="attempts" min="0" max="100" required>
+        </div>
+        <div class="form-group">
+          <label for="maxAttemptsInput">最大获取次数</label>
+          <input id="maxAttemptsInput" type="number" name="max_attempts" min="1" max="100" required>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-cancel" onclick="closeAttemptsModal()">取消</button>
+          <button type="submit" class="btn btn-primary">保存次数</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    var selectedMap = {};
+    var lastCheckedCard = null;
+
+    function toggleAll() {
+      var checked = document.getElementById('selectAll').checked;
+      document.querySelectorAll('.card-check').forEach(function(cb) { cb.checked = checked; });
+      var head = document.getElementById('selectAllHead');
+      if (head) head.checked = checked;
+      updateCount();
+    }
+    function toggleAllHead(el) {
+      document.querySelectorAll('.card-check').forEach(function(cb) { cb.checked = el.checked; });
+      document.getElementById('selectAll').checked = el.checked;
+      updateCount();
+    }
+    function clearSelection() {
+      document.querySelectorAll('.card-check').forEach(function(cb) { cb.checked = false; });
+      lastCheckedCard = null;
+      updateCount();
+    }
+    function getSelected() {
+      return Array.from(document.querySelectorAll('.card-check:checked')).map(function(cb) { return cb.value; });
+    }
+    function updateCount() {
+      var n = getSelected().length;
+      var allCards = Array.from(document.querySelectorAll('.card-check'));
+      var isAll = allCards.length > 0 && n === allCards.length;
+      var isPartial = n > 0 && !isAll;
+      document.getElementById('selectedCount').textContent = n ? '已选择 ' + n + ' 张' : '未选择卡密';
+      document.querySelectorAll('[data-selection-action]').forEach(function(button) { button.disabled = n === 0; });
+      var clearButton = document.getElementById('clearSelectionBtn');
+      if (clearButton) clearButton.disabled = n === 0;
+      ['selectAll', 'selectAllHead'].forEach(function(id) {
+        var selectAll = document.getElementById(id);
+        if (!selectAll) return;
+        selectAll.checked = isAll;
+        selectAll.indeterminate = isPartial;
+      });
+      allCards.forEach(function(checkbox) {
+        var row = checkbox.closest('tr');
+        if (row) row.classList.toggle('is-selected', checkbox.checked);
+      });
+    }
+    document.addEventListener('click', function(e) {
+      if (!e.target.classList.contains('card-check')) return;
+      var current = e.target;
+      if (e.shiftKey && lastCheckedCard && lastCheckedCard !== current) {
+        var allCards = Array.from(document.querySelectorAll('.card-check'));
+        var start = allCards.indexOf(lastCheckedCard);
+        var end = allCards.indexOf(current);
+        if (start !== -1 && end !== -1) {
+          var from = Math.min(start, end);
+          var to = Math.max(start, end);
+          for (var i = from; i <= to; i += 1) allCards[i].checked = current.checked;
+        }
+      }
+      lastCheckedCard = current;
+      updateCount();
+    });
+    document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('card-check')) updateCount();
+    });
+
+    function showToast(msg, type) {
+      var t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast toast-' + (type || 'success') + ' show';
+      clearTimeout(t._hide);
+      t._hide = setTimeout(function() { t.classList.remove('show'); }, 2500);
+    }
+
+    function openAttemptsModal(button) {
+      var modal = document.getElementById('attemptsModal');
+      var cardId = button.dataset.id;
+      document.getElementById('attemptsForm').action = '/admin/cards/attempts/' + cardId;
+      document.getElementById('attemptsModalCode').textContent = '卡密：' + button.dataset.code;
+      document.getElementById('attemptsInput').value = button.dataset.attempts;
+      document.getElementById('maxAttemptsInput').value = button.dataset.maxAttempts;
+      document.getElementById('attemptsModalHelp').textContent = button.dataset.hasSms === '1'
+        ? '该卡密已收到验证码。可以修正记录次数，但仍不可重新获取号码。'
+        : '次数用完会自动归为“已使用”；增加上限后，未收到验证码的卡密可恢复取号。';
+      modal.classList.add('show');
+      modal.setAttribute('aria-hidden', 'false');
+      document.getElementById('attemptsInput').focus();
+    }
+
+    function closeAttemptsModal() {
+      var modal = document.getElementById('attemptsModal');
+      modal.classList.remove('show');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    document.getElementById('attemptsModal').addEventListener('click', function(event) {
+      if (event.target === this) closeAttemptsModal();
+    });
+
+    async function checkPrefix(cardId) {
+      var btn = document.getElementById('prefix-btn-' + cardId);
+      if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; }
+      try {
+        var resp = await fetch('/admin/cards/check-prefix/' + cardId, { method: 'POST' });
+        var data = await resp.json();
+        if (data.success) {
+          if (data.match) {
+            showToast('✅ ' + (data.message || '号码符合号段要求'));
+          } else {
+            showToast('🔄 ' + (data.message || '号码已释放'));
+            var row = document.getElementById('card-row-' + cardId);
+            if (row) {
+              var phoneCell = row.querySelector('[data-label="手机号"]');
+              if (phoneCell) phoneCell.innerHTML = '<span class="card-phone">-</span>';
+            }
+          }
+        } else {
+          showToast((data.match === false ? '🔄 ' : 'ℹ️ ') + (data.error || (data.match ? '号码符合号段' : '操作完成')), 'info');
+        }
+      } catch(e) { showToast('❌ 请求失败', 'error'); }
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    }
+
+    async function releasePhone(cardId) {
+      var btn = document.getElementById('release-btn-' + cardId);
+      if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; }
+      try {
+        var resp = await fetch('/admin/cards/release-phone/' + cardId, { method: 'POST' });
+        var data = await resp.json();
+        if (data.success) {
+          showToast('✅ 手机号已释放', 'success');
+          var row = document.getElementById('card-row-' + cardId);
+          if (row) {
+            var phoneCell = row.querySelector('[data-label="手机号"]');
+            if (phoneCell) phoneCell.innerHTML = '<span class="card-phone">-</span>';
+            var actionCell = row.querySelector('[data-label="操作"] .row-actions');
+            if (actionCell && btn) btn.remove();
+          }
+        } else {
+          showToast('❌ ' + (data.error || '释放失败'), 'error');
+          if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        }
+      } catch(e) {
+        showToast('❌ 请求失败', 'error');
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+      }
+    }
+
+    function batchDelete() {
+      var ids = getSelected();
+      if (!ids.length) { showToast('请先选择卡密', 'error'); return; }
+      if (!confirm('确定删除选中的 ' + ids.length + ' 张卡密？')) return;
+      var form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/admin/cards/batch-delete';
+      ids.forEach(function(id) {
+        var input = document.createElement('input');
+        input.type = 'hidden'; input.name = 'ids'; input.value = id;
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    }
+
+    function copyToClipboard(text, successMsg) {
+      if (!text) {
+        showToast('没有可复制的内容', 'error');
+        return;
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(function() {
+          showToast(successMsg || '已复制');
+        }).catch(function() {
+          fallbackCopy(text, successMsg);
+        });
+      } else {
+        fallbackCopy(text, successMsg);
+      }
+    }
+
+    function fallbackCopy(text, successMsg) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', 'readonly');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '0';
+      ta.style.width = '1px';
+      ta.style.height = '1px';
+      ta.style.opacity = '0';
+      ta.style.fontSize = '16px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      try {
+        var ok = document.execCommand('copy');
+        if (ok) {
+          showToast(successMsg || '已复制');
+        } else {
+          showManualCopy(text);
+        }
+      } catch(e) {
+        showManualCopy(text);
+      }
+      document.body.removeChild(ta);
+    }
+
+    function showManualCopy(text) {
+      var old = document.getElementById('manualCopyBox');
+      if (old) old.remove();
+      var box = document.createElement('div');
+      box.id = 'manualCopyBox';
+      box.className = 'manual-copy-box';
+      box.innerHTML = '<div class="manual-copy-card"><div class="manual-copy-title">长按复制内容</div><textarea readonly></textarea><button type="button" onclick="this.closest(\'.manual-copy-box\').remove()">关闭</button></div>';
+      box.querySelector('textarea').value = text;
+      document.body.appendChild(box);
+      box.querySelector('textarea').focus();
+      box.querySelector('textarea').select();
+      showToast('当前浏览器限制自动复制，请长按内容复制', 'error');
+    }
+
+    function batchExport() {
+      var codes = [];
+      document.querySelectorAll('.card-check:checked').forEach(function(cb) {
+        var row = cb.closest('tr');
+        var el = row ? row.querySelector('.card-code') : null;
+        if (el) codes.push(el.textContent.trim());
+      });
+      if (!codes.length) { showToast('请先勾选卡密', 'error'); return; }
+      copyToClipboard(codes.join('\n'), '已复制 ' + codes.length + ' 个卡密');
+    }
+
+    function batchExportLinks() {
+      var links = [];
+      var base = window.location.origin;
+      document.querySelectorAll('.card-check:checked').forEach(function(cb) {
+        var row = cb.closest('tr');
+        var el = row ? row.querySelector('.card-code') : null;
+        if (el) links.push(base + '/?card=' + el.textContent.trim());
+      });
+      if (!links.length) { showToast('请先勾选卡密', 'error'); return; }
+      copyToClipboard(links.join('\n'), '已复制 ' + links.length + ' 个链接');
+    }
+
+    function copyText(text, successMsg) {
+      copyToClipboard(text, successMsg || '卡密已复制');
+    }
+    function copyLink(code) {
+      var url = window.location.origin + '/?card=' + code;
+      copyToClipboard(url, '链接已复制');
+    }
+  </script>
+</body>
+</html>

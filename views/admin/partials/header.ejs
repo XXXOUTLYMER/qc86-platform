@@ -1,0 +1,51 @@
+<div class="header">
+  <div class="logo"><a href="/admin/dashboard">卡密接码平台</a></div>
+  <button class="hamburger" onclick="toggleNav(this)" aria-label="打开后台菜单" aria-controls="adminNav" aria-expanded="false">☰</button>
+  <nav id="adminNav">
+    <a href="/admin/dashboard" class="<%= active === 'dashboard' ? 'active' : '' %>">仪表盘</a>
+    <a href="/admin/channels" class="<%= active === 'channels' ? 'active' : '' %>">项目管理</a>
+    <a href="/admin/api-providers" class="<%= active === 'api-providers' ? 'active' : '' %>">API 对接</a>
+    <a href="/admin/cards" class="<%= active === 'cards' ? 'active' : '' %>">卡密管理</a>
+    <a href="/admin/records" class="<%= active === 'records' ? 'active' : '' %>">使用记录</a>
+    <a href="/admin/rejected" class="<%= active === 'rejected' ? 'active' : '' %>">号段过滤</a>
+    <a href="/admin/test" class="<%= active === 'test' ? 'active' : '' %>">测试管理</a>
+    <div class="nav-mobile-meta">
+      <span>管理员：<strong><%= admin ? admin.username : '' %></strong></span>
+      <div>
+        <a href="/admin/account" class="<%= active === 'account' ? 'active' : '' %>">账户安全</a>
+        <a href="/">用户首页</a>
+        <a href="/admin/logout">退出登录</a>
+      </div>
+    </div>
+  </nav>
+  <div class="user-info">
+    <span><%= admin ? admin.username : '' %></span>
+    <a href="/admin/account" class="<%= active === 'account' ? 'active' : '' %>">账户安全</a>
+    <a href="/">用户首页</a>
+    <a href="/admin/logout">退出</a>
+  </div>
+</div>
+<script>
+function toggleNav(button) {
+  var nav = document.getElementById('adminNav');
+  var isOpen = nav.classList.toggle('open');
+  button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+// 点击页面其他区域关闭菜单
+document.addEventListener('click', function(e) {
+  var nav = document.getElementById('adminNav');
+  var btn = document.querySelector('.hamburger');
+  if (nav && btn && !nav.contains(e.target) && !btn.contains(e.target)) {
+    nav.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+});
+document.addEventListener('click', function(e) {
+  if (e.target.closest('#adminNav a')) {
+    var nav = document.getElementById('adminNav');
+    var btn = document.querySelector('.hamburger');
+    if (nav) nav.classList.remove('open');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+});
+</script>

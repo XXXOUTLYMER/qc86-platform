@@ -1,0 +1,7 @@
+<div class="form-group"><label>地区范围（qc86 scope，可选）</label><input name="scope" id="<%= prefix %>Scope" placeholder="留空为全部地区"></div>
+<div class="form-group"><label>号段过滤模式</label><select name="prefix_filter_mode" id="<%= prefix %>PrefixFilterMode" onchange="syncPrefixFilterFields(this)"><option value="disabled">关闭过滤</option><option value="include" selected>指定号段</option><option value="exclude">排除号段</option></select><div class="field-hint">指定与排除只能二选一，不会同时生效。</div></div>
+<div class="form-group prefix-filter-dependent"><label id="<%= prefix %>PrefixLabel">指定号段</label><input name="prefix" id="<%= prefix %>Prefix" placeholder="例如：170, 171, 162"><div class="field-hint" id="<%= prefix %>PrefixHint">仅保留以任一填写号段开头的号码。支持逗号、空格或中文逗号分隔。</div></div>
+<div class="form-group prefix-filter-dependent"><label>最多请求次数</label><input type="number" name="prefix_max_requests" id="<%= prefix %>PrefixMaxRequests" min="1" max="20" value="20"><div class="field-hint">严格逐个请求，找到符合规则的号码立即停止，最多 20 次。</div></div>
+<div class="form-group prefix-filter-dependent"><label>号码请求间隔（秒）</label><input type="number" name="prefix_request_interval_seconds" id="<%= prefix %>PrefixRequestInterval" min="0.5" max="10" step="0.5" value="0.5"></div>
+<div class="form-group"><label>运营商（qc86）</label><select name="operator" id="<%= prefix %>Operator"><option value="0">全部</option><option value="5">虚拟运营商</option><option value="4">非虚拟运营商</option></select></div>
+<div class="form-group"><label>描述</label><input name="description" id="<%= prefix %>Description" placeholder="可选"></div>

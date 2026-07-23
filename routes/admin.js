@@ -8,6 +8,7 @@ const config = require('../config');
 const qc86 = require('../api/qc86');
 const { getPhoneWithPrefix } = qc86;
 const providerService = require('../api/providerService');
+const { extractProviderBalance } = require('../api/providerBalance');
 const uoomsg = require('../api/uoomsg');
 const { registerRejectedPhone, releaseRejectedPhone } = require('./rejectedPhones');
 const { generateCardCode } = require('../services/cardKeyCodes');
@@ -18,38 +19,6 @@ const router = express.Router();
 function requireBetaPublisher(req, res, next) {
   if (config.app.stage !== 'beta') return res.status(404).send('Page not found');
   next();
-}
-
-function extractProviderBalance(result) {
-  const balanceKeys = new Set(['balance', 'balances', 'amount', 'money', 'credit', 'wallet']);
-  if (typeof result === 'number') return result;
-  if (typeof result === 'string' && result.trim() !== '') return result.trim();
-
-  const queue = [result];
-  const visited = new Set();
-
-  while (queue.length) {
-    const current = queue.shift();
-    if (current === null || current === undefined) continue;
-    if (typeof current !== 'object' || visited.has(current)) continue;
-    visited.add(current);
-
-    for (const [key, value] of Object.entries(current)) {
-      if (balanceKeys.has(String(key).toLowerCase())) {
-        if (typeof value === 'number') return value;
-        if (typeof value === 'string' && value.trim() !== '') return value.trim();
-      }
-      if (String(key).toLowerCase() === 'data') {
-        if (typeof value === 'number') return value;
-        if (typeof value === 'string' && value.trim() !== '') return value.trim();
-      }
-    }
-
-    for (const value of Object.values(current)) {
-      if (value && typeof value === 'object') queue.push(value);
-    }
-  }
-  return null;
 }
 
 function normalizePrefixEnabled(value) {
@@ -76,6 +45,15 @@ function normalizePrefixRequestIntervalMs(value) {
   const parsedSeconds = parseFloat(value);
   const intervalMs = Number.isFinite(parsedSeconds) ? Math.round(parsedSeconds * 1000) : 500;
   return Math.min(10000, Math.max(500, intervalMs));
+}
+
+function normalizeDirectScope(value) {
+  const scope = String(value || '').trim();
+  if (!scope) return '';
+  if (!/^\d{1,11}$/.test(scope)) {
+    throw new Error('API 直接指定号段只能填写 1 至 11 位数字，例如：170');
+  }
+  return scope;
 }
 
 function normalizeCooldownSeconds(value) {
@@ -500,9 +478,10 @@ router.post('/channels/add', requireAdmin, (req, res) => {
   const prefixConcurrency = Math.min(prefixMaxRequests, normalizePrefixConcurrency(req.body.prefix_concurrency));
   const prefixRequestIntervalMs = normalizePrefixRequestIntervalMs(req.body.prefix_request_interval_seconds);
   try {
+    const directScope = provider.provider_type === 'qc86' ? normalizeDirectScope(req.body.direct_scope) : '';
     db.prepare(`
-      INSERT INTO channels (name, channel_id, provider_id, api_keyword, api_phone, api_province, api_card_type, operator, scope, prefix, prefix_enabled, prefix_filter_mode, prefix_max_requests, prefix_concurrency, prefix_request_interval_ms, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO channels (name, channel_id, provider_id, api_keyword, api_phone, api_province, api_card_type, operator, scope, direct_scope, prefix, prefix_enabled, prefix_filter_mode, prefix_max_requests, prefix_concurrency, prefix_request_interval_ms, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run([
       name,
       String(channel_id || '').trim(),
@@ -513,6 +492,7 @@ router.post('/channels/add', requireAdmin, (req, res) => {
       ['实卡', '虚卡', '全部'].includes(api_card_type) ? api_card_type : '全部',
       parseInt(operator || 0),
       scope || '',
+      directScope,
       String(prefix || '').trim(),
       prefixEnabled,
       prefixFilterMode,
@@ -541,9 +521,10 @@ router.post('/channels/edit/:id', requireAdmin, (req, res) => {
   const prefixConcurrency = Math.min(prefixMaxRequests, normalizePrefixConcurrency(req.body.prefix_concurrency));
   const prefixRequestIntervalMs = normalizePrefixRequestIntervalMs(req.body.prefix_request_interval_seconds);
   try {
+    const directScope = provider.provider_type === 'qc86' ? normalizeDirectScope(req.body.direct_scope) : '';
     db.prepare(`
       UPDATE channels
-      SET name=?, channel_id=?, provider_id=?, api_keyword=?, api_phone=?, api_province=?, api_card_type=?, operator=?, scope=?, prefix=?, prefix_enabled=?, prefix_filter_mode=?, prefix_max_requests=?, prefix_concurrency=?, prefix_request_interval_ms=?, description=?, is_active=?
+      SET name=?, channel_id=?, provider_id=?, api_keyword=?, api_phone=?, api_province=?, api_card_type=?, operator=?, scope=?, direct_scope=?, prefix=?, prefix_enabled=?, prefix_filter_mode=?, prefix_max_requests=?, prefix_concurrency=?, prefix_request_interval_ms=?, description=?, is_active=?
       WHERE id=?
     `).run([
       name,
@@ -555,6 +536,7 @@ router.post('/channels/edit/:id', requireAdmin, (req, res) => {
       ['实卡', '虚卡', '全部'].includes(api_card_type) ? api_card_type : '全部',
       parseInt(operator || 0),
       scope || '',
+      directScope,
       String(prefix || '').trim(),
       prefixEnabled,
       prefixFilterMode,

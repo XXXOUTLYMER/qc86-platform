@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const config = require('./config');
 
 const DB_PATH = path.join(__dirname, 'data', 'platform.db');
 const dir = path.dirname(DB_PATH);
@@ -224,8 +225,9 @@ async function initDb() {
   // Seed admin
   const c = db.prepare('SELECT COUNT(*) as count FROM admins').get();
   if (!c || c.count === 0) {
-    const hash = bcrypt.hashSync('admin123', 10);
-    db.prepare('INSERT INTO admins (username, password_hash) VALUES (?, ?)').run(['admin', hash]);
+    const initialAdmin = config.initialAdmin.getCredentials();
+    const hash = bcrypt.hashSync(initialAdmin.password, 10);
+    db.prepare('INSERT INTO admins (username, password_hash) VALUES (?, ?)').run([initialAdmin.username, hash]);
   }
 
   // Migrations

@@ -21,13 +21,33 @@ function requireBetaPublisher(req, res, next) {
 }
 
 function extractProviderBalance(result) {
-  const candidates = [
-    result && result.balance,
-    result && result.data && result.data.balances,
-    result && result.data && result.data.balance
-  ];
-  for (const value of candidates) {
-    if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+  const balanceKeys = new Set(['balance', 'balances', 'amount', 'money', 'credit', 'wallet']);
+  if (typeof result === 'number') return result;
+  if (typeof result === 'string' && result.trim() !== '') return result.trim();
+
+  const queue = [result];
+  const visited = new Set();
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (current === null || current === undefined) continue;
+    if (typeof current !== 'object' || visited.has(current)) continue;
+    visited.add(current);
+
+    for (const [key, value] of Object.entries(current)) {
+      if (balanceKeys.has(String(key).toLowerCase())) {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string' && value.trim() !== '') return value.trim();
+      }
+      if (String(key).toLowerCase() === 'data') {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string' && value.trim() !== '') return value.trim();
+      }
+    }
+
+    for (const value of Object.values(current)) {
+      if (value && typeof value === 'object') queue.push(value);
+    }
   }
   return null;
 }

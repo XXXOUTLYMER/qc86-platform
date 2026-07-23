@@ -1,15 +1,25 @@
 <div class="header">
-  <div class="logo"><a href="/admin/dashboard">卡密接码平台</a></div>
+  <div class="logo">
+    <a href="/admin/dashboard">卡密接码平台</a>
+    <% if (typeof appVersionLabel !== 'undefined') { %>
+      <span class="app-version app-version-<%= appStage %>"><%= appVersionLabel %></span>
+    <% } %>
+  </div>
   <button class="hamburger" onclick="toggleNav(this)" aria-label="打开后台菜单" aria-controls="adminNav" aria-expanded="false">☰</button>
   <nav id="adminNav">
     <a href="/admin/dashboard" class="<%= active === 'dashboard' ? 'active' : '' %>">仪表盘</a>
     <a href="/admin/channels" class="<%= active === 'channels' ? 'active' : '' %>">项目管理</a>
     <a href="/admin/api-providers" class="<%= active === 'api-providers' ? 'active' : '' %>">API 对接</a>
+    <a href="/admin/settings" class="<%= active === 'settings' ? 'active' : '' %>">网站设置</a>
     <a href="/admin/cards" class="<%= active === 'cards' ? 'active' : '' %>">卡密管理</a>
     <a href="/admin/records" class="<%= active === 'records' ? 'active' : '' %>">使用记录</a>
+    <a href="/admin/cleanup" class="<%= active === 'cleanup' ? 'active' : '' %>">数据清理</a>
     <a href="/admin/rejected" class="<%= active === 'rejected' ? 'active' : '' %>">号段过滤</a>
     <a href="/admin/test" class="<%= active === 'test' ? 'active' : '' %>">测试管理</a>
     <a href="/admin/sync" class="<%= active === 'sync' ? 'active' : '' %>">数据同步</a>
+    <% if (appStage === 'beta') { %>
+      <a href="/admin/publish" class="<%= active === 'publish' ? 'active' : '' %>">发布中心</a>
+    <% } %>
     <div class="nav-mobile-meta">
       <span>管理员：<strong><%= admin ? admin.username : '' %></strong></span>
       <div>

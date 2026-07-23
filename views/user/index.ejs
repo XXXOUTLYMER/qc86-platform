@@ -242,7 +242,7 @@
         scale(var(--doodle-scale));
       filter: drop-shadow(0 0 var(--doodle-glow) rgba(52, 239, 121, 0.48));
       transition: opacity .2s ease, color .2s ease, filter .22s ease, transform .24s cubic-bezier(.16,1,.3,1);
-      will-change: transform, opacity;
+      will-change: auto;
     }
     .phone-doodle svg {
       display: block;
@@ -254,6 +254,7 @@
     }
     .phone-doodle.is-near {
       color: rgba(113, 255, 165, 0.96);
+      will-change: transform, opacity, filter;
     }
     @keyframes phoneDoodleDrift {
       from { transform: translate3d(0, -1px, 0); }
@@ -276,8 +277,9 @@
         will-change: auto;
       }
       .phone-doodle svg {
-        animation: phoneDoodleDrift var(--duration) ease-in-out var(--delay) infinite alternate;
+        animation: none;
       }
+      .phone-doodle:nth-child(3n) { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1460,6 +1462,12 @@
       body.step-enter_card .glass {
         flex: 0 0 auto;
       }
+
+      /* The filtering view is shorter than the card-entry form, so nudge it
+         down on phones to keep the visual center in the middle of the screen. */
+      body.step-filtering .glass {
+        top: clamp(28px, 7svh, 52px);
+      }
     }
 
     /* ===== PREFIX FILTERING STATUS ===== */
@@ -1522,6 +1530,29 @@
       margin-top: 18px;
       padding: 9px 13px;
       font-size: 12px;
+    }
+    .app-build-label {
+      position: fixed;
+      right: max(14px, env(safe-area-inset-right));
+      bottom: max(12px, env(safe-area-inset-bottom));
+      z-index: 3;
+      padding: 5px 8px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 999px;
+      background: rgba(8, 12, 10, .48);
+      color: rgba(230, 245, 235, .44);
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: .02em;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .app-build-beta { color: rgba(245, 203, 151, .56); }
+    .app-build-production { color: rgba(174, 244, 198, .58); }
+    @media (max-width: 520px) {
+      .app-build-label { right: 10px; bottom: max(9px, env(safe-area-inset-bottom)); font-size: 9px; }
     }
   </style>
 </head>
@@ -1719,15 +1750,45 @@
       </form>
     </div>
     <script>
-      document.getElementById('card_code').addEventListener('input', function() {
-        var code = this.value.trim().toUpperCase();
-        if (code.length >= 8) {
-          var info = document.getElementById('cardInfo');
-          info.style.display = 'block';
-          info.innerHTML = '<span style="color:rgba(255,255,255,0.3);font-size:12px">🔍 正在查询...</span>';
-          fetch('/check-card?code=' + encodeURIComponent(code))
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
+      (function() {
+        var cardInput = document.getElementById('card_code');
+        var info = document.getElementById('cardInfo');
+        var statusText = document.getElementById('cardStatusText');
+        var checkTimer = 0;
+        var checkController = null;
+        var checkSequence = 0;
+        var completeCardPattern = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/;
+
+        function clearCardCheck() {
+          window.clearTimeout(checkTimer);
+          checkTimer = 0;
+          checkSequence += 1;
+          if (checkController) {
+            checkController.abort();
+            checkController = null;
+          }
+        }
+
+        cardInput.addEventListener('input', function() {
+          var code = this.value.replace(/\s+/g, '').toUpperCase();
+          if (this.value !== code) this.value = code;
+
+          clearCardCheck();
+          if (!completeCardPattern.test(code)) {
+            info.style.display = 'none';
+            statusText.textContent = '输入完整卡密后自动匹配项目';
+            return;
+          }
+
+          var requestSequence = checkSequence;
+          checkTimer = window.setTimeout(function() {
+            checkController = window.AbortController ? new AbortController() : null;
+            info.style.display = 'block';
+            info.innerHTML = '<span style="color:rgba(255,255,255,0.3);font-size:12px">🔍 正在查询...</span>';
+            fetch('/check-card?code=' + encodeURIComponent(code), checkController ? { signal: checkController.signal } : undefined)
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                if (requestSequence !== checkSequence || cardInput.value !== code) return;
               var statusText = document.getElementById('cardStatusText');
               var buttonLabel = document.querySelector('#redeemButton .btn-label');
               info.style.background = '';
@@ -1757,13 +1818,16 @@
                 statusText.textContent = '卡密不存在或已被删除';
                 if (buttonLabel) buttonLabel.textContent = '获取手机号';
               }
-            })
-            .catch(function() { info.style.display = 'none'; });
-        } else {
-          document.getElementById('cardInfo').style.display = 'none';
-          document.getElementById('cardStatusText').textContent = '输入卡密后自动匹配项目';
-        }
-      });
+              })
+              .catch(function(error) {
+                if (error && error.name === 'AbortError') return;
+                if (requestSequence === checkSequence && cardInput.value === code) {
+                  info.style.display = 'none';
+                }
+              });
+          }, 300);
+        });
+      })();
     </script>
     <% } %>
 
@@ -1856,6 +1920,10 @@
     <% } %>
 
   </main>
+
+  <% if (typeof appVersionLabel !== 'undefined') { %>
+    <div class="app-build-label app-build-<%= appStage %>" aria-label="当前版本"><%= appVersionLabel %></div>
+  <% } %>
 
   <!-- ===== LOADING SCREEN HIDE SCRIPT ===== -->
   <script>
@@ -2019,7 +2087,17 @@
          if (data.state === 'success' && data.phoneNumber && !redirecting) {
            redirecting = true;
            stopPolling();
-           window.location.replace('/?card=' + encodeURIComponent(data.cardCode || cardCode));
+           if (window.qc86ShowLoadingOverlay) {
+             window.qc86ShowLoadingOverlay('号码已准备好');
+           }
+           try { window.sessionStorage.setItem('qc86:page-transition', '1'); } catch (e) {}
+           window.requestAnimationFrame(function() {
+             window.requestAnimationFrame(function() {
+               window.setTimeout(function() {
+                 window.location.replace('/?card=' + encodeURIComponent(data.cardCode || cardCode));
+               }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 80 : 760);
+             });
+           });
            return;
          }
          if (data.state === 'failed') {
@@ -2041,7 +2119,16 @@
        }
      }
 
-     pollStatus();
+     // Do not let a very fast result navigate away before the loading layer has
+     // painted. This makes the handoff from card entry to the number screen visible.
+     var pollingStarted = false;
+     function startPollingAfterTransition() {
+       if (pollingStarted) return;
+       pollingStarted = true;
+       pollStatus();
+     }
+     window.addEventListener('qc86:loading-complete', startPollingAfterTransition, { once: true });
+     window.setTimeout(startPollingAfterTransition, 1600);
      document.addEventListener('visibilitychange', function() {
        if (document.visibilityState === 'hidden') {
          if (pollController) pollController.abort();
@@ -2494,10 +2581,30 @@
     var phonePattern = document.getElementById('phonePattern');
     if (phonePattern) {
       var phoneDoodles = Array.prototype.slice.call(phonePattern.querySelectorAll('.phone-doodle'));
+      var interactiveDoodles = [];
       var phonePatternFrame = 0;
       var pointerX = window.innerWidth / 2;
       var pointerY = window.innerHeight / 2;
       var resetPhonePatternTimer = 0;
+      var supportsFinePointer = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+      // Keep the decoration responsive: measuring every icon on every pointer
+      // move forces browser layout work right when the card form is used.
+      function measurePhoneDoodles() {
+        interactiveDoodles = phoneDoodles
+          .filter(function(_, index) { return index % 2 === 0; })
+          .map(function(doodle) {
+            var rect = doodle.getBoundingClientRect();
+            return {
+              el: doodle,
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+              opacity: parseFloat(doodle.style.getPropertyValue('--base-opacity')) || 0.1
+            };
+          });
+      }
+      measurePhoneDoodles();
+      window.addEventListener('resize', measurePhoneDoodles, { passive: true });
 
       function resetPhonePattern() {
         phoneDoodles.forEach(function(doodle) {
@@ -2516,13 +2623,13 @@
         phonePattern.style.setProperty('--pointer-x', (pointerX / window.innerWidth * 100).toFixed(1) + '%');
         phonePattern.style.setProperty('--pointer-y', (pointerY / window.innerHeight * 100).toFixed(1) + '%');
 
-        phoneDoodles.forEach(function(doodle) {
-          var rect = doodle.getBoundingClientRect();
-          var dx = pointerX - (rect.left + rect.width / 2);
-          var dy = pointerY - (rect.top + rect.height / 2);
+        interactiveDoodles.forEach(function(item) {
+          var doodle = item.el;
+          var dx = pointerX - item.x;
+          var dy = pointerY - item.y;
           var distance = Math.sqrt(dx * dx + dy * dy);
           var strength = Math.max(0, 1 - distance / 155);
-          var baseOpacity = parseFloat(doodle.style.getPropertyValue('--base-opacity')) || 0.1;
+          var baseOpacity = item.opacity;
 
           doodle.classList.toggle('is-near', strength > 0.08);
           doodle.style.setProperty('--react-x', (dx * strength * 0.035).toFixed(2) + 'px');
@@ -2534,17 +2641,21 @@
       }
 
       document.addEventListener('pointermove', function(e) {
-        if (e.pointerType !== 'mouse') return;
+        if (!supportsFinePointer || e.pointerType !== 'mouse') return;
         pointerX = e.clientX;
         pointerY = e.clientY;
         if (!phonePatternFrame) phonePatternFrame = window.requestAnimationFrame(updatePhonePattern);
       }, { passive: true });
       document.addEventListener('pointerdown', function(e) {
-        if (e.pointerType !== 'mouse' && e.target.closest('main, .loading-overlay')) return;
         pointerX = e.clientX;
         pointerY = e.clientY;
         phonePattern.style.setProperty('--touch-pulse', e.pointerType === 'mouse' ? '0' : '1');
-        if (!phonePatternFrame) phonePatternFrame = window.requestAnimationFrame(updatePhonePattern);
+        if (supportsFinePointer && !phonePatternFrame) {
+          phonePatternFrame = window.requestAnimationFrame(updatePhonePattern);
+        } else if (!supportsFinePointer) {
+          phonePattern.style.setProperty('--pointer-x', (pointerX / window.innerWidth * 100).toFixed(1) + '%');
+          phonePattern.style.setProperty('--pointer-y', (pointerY / window.innerHeight * 100).toFixed(1) + '%');
+        }
         window.clearTimeout(resetPhonePatternTimer);
       }, { passive: true });
       document.addEventListener('pointerup', function(e) {
@@ -2758,16 +2869,20 @@
         redeemButton.classList.add('is-loading');
         var label = redeemButton.querySelector('.btn-label');
         if (label) label.textContent = '正在连接';
+        try {
+          window.sessionStorage.setItem('qc86:page-transition', '1');
+        } catch (e) {}
         if (window.qc86ShowLoadingOverlay) {
           window.qc86ShowLoadingOverlay('正在获取号码');
         }
-        var transitionDelay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 120 : 1180;
-        window.setTimeout(function() {
-          try {
-            window.sessionStorage.setItem('qc86:page-transition', '1');
-          } catch (e) {}
-          HTMLFormElement.prototype.submit.call(redeemForm);
-        }, transitionDelay);
+        var transitionDelay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 120 : 980;
+        window.requestAnimationFrame(function() {
+          window.requestAnimationFrame(function() {
+            window.setTimeout(function() {
+              HTMLFormElement.prototype.submit.call(redeemForm);
+            }, transitionDelay);
+          });
+        });
       });
     }
 

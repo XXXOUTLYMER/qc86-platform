@@ -1,17 +1,16 @@
+# 用 GitHub Container Registry 镜像部署时使用此文件。
+# 在 fnos.env 中设置：QC86_IMAGE=ghcr.io/<GitHub 用户名>/<仓库名>:v1.0.1
 services:
   qc86-platform:
-    build: .
+    image: ${QC86_IMAGE:?请先在 fnos.env 中设置 QC86_IMAGE}
     container_name: qc86-platform
     restart: unless-stopped
     init: true
-    # fnOS 文件管理器中直接编辑同目录的 fnos.env 即可配置密钥。
     env_file:
       - ./fnos.env
     ports:
-      # 初次内网测试可保留 3000；正式对外时只让反向代理访问容器。
       - "3000:3000"
     volumes:
-      # 持久化 SQLite 数据库
       - ./data:/app/data
     environment:
       - PORT=3000

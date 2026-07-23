@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发布中心 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'publish' }) %>
+  <main class="main publish-main">
+    <section class="publish-heading">
+      <div>
+        <p class="publish-eyebrow">本地 Beta 专用</p>
+        <h2>发布中心</h2>
+        <p>将当前 Mac 上已保存的代码发布到 GitHub。NAS 正式网站不显示此入口，也没有发布权限。</p>
+      </div>
+      <span class="publish-stage">Beta</span>
+    </section>
+
+    <% if (success) { %><div class="message message-success"><%= success %></div><% } %>
+    <% if (error) { %><div class="message message-error"><%= error %></div><% } %>
+
+    <% if (gitStatus) { %>
+      <section class="publish-status-card" aria-label="本地代码状态">
+        <div class="publish-status-head">
+          <div>
+            <h3>本地代码状态</h3>
+            <p><%= gitStatus.isClean ? '当前没有未发布的代码改动。' : '以下改动会在发布时一并提交到 GitHub。' %></p>
+          </div>
+          <span class="publish-state <%= gitStatus.isClean ? 'publish-state-clean' : 'publish-state-dirty' %>"><%= gitStatus.isClean ? '已同步' : '有待发布改动' %></span>
+        </div>
+        <dl class="publish-meta-grid">
+          <div><dt>当前分支</dt><dd><code><%= gitStatus.branch %></code></dd></div>
+          <div><dt>GitHub 仓库</dt><dd><%= gitStatus.hasOrigin ? '已连接' : '未连接' %></dd></div>
+          <div><dt>上次提交</dt><dd><code><%= gitStatus.lastCommit.hash || '-' %></code> <span><%= gitStatus.lastCommit.subject || '暂无提交' %></span></dd></div>
+          <div><dt>待发布文件</dt><dd><strong><%= gitStatus.changedFileCount %></strong> 个</dd></div>
+        </dl>
+        <% if (gitStatus.changedFiles.length) { %>
+          <details class="publish-changes" open>
+            <summary>查看待发布文件（<%= gitStatus.changedFileCount %>）</summary>
+            <ul>
+              <% gitStatus.changedFiles.forEach(function(file) { %><li><code><%= file %></code></li><% }) %>
+              <% if (gitStatus.changedFileCount > gitStatus.changedFiles.length) { %><li>其余文件未展开显示</li><% } %>
+            </ul>
+          </details>
+        <% } %>
+      </section>
+    <% } %>
+
+    <section class="publish-actions-grid">
+      <article class="publish-action-card">
+        <div class="publish-card-icon" aria-hidden="true">B</div>
+        <div class="publish-card-copy">
+          <h3>发布 Beta</h3>
+          <p>推送到 GitHub 的 <code>beta</code> 分支，用于测试和预览。不会改动 NAS 正式版。</p>
+        </div>
+        <form method="POST" action="/admin/publish/beta" onsubmit="return confirm('确认将当前本地代码发布为 Beta 吗？页面列出的改动会一并提交到 GitHub。');">
+          <button class="btn-apple btn-apple-primary" type="submit" <%= !gitStatus || !gitStatus.hasOrigin ? 'disabled' : '' %>>发布 Beta</button>
+        </form>
+      </article>
+
+      <article class="publish-action-card publish-action-release">
+        <div class="publish-card-icon" aria-hidden="true">R</div>
+        <div class="publish-card-copy">
+          <h3>发布正式版</h3>
+          <p>推送到 <code>main</code> 并创建不可重复的版本标签。GitHub 会据此构建正式镜像，NAS 仍需在确认后更新。</p>
+        </div>
+        <form class="publish-release-form" method="POST" action="/admin/publish/release" onsubmit="return confirm('确认发布正式版吗？发布后会创建版本标签，不能覆盖已有版本。');">
+          <label for="releaseVersion">版本号</label>
+          <div>
+            <input id="releaseVersion" name="version" inputmode="text" pattern="v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?" placeholder="例如 v1.0.1" required>
+            <button class="btn-apple btn-apple-success" type="submit" <%= !gitStatus || !gitStatus.hasOrigin ? 'disabled' : '' %>>发布正式版</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <p class="publish-note">发布不会保存 GitHub Token，也不会发送数据库、环境变量或 NAS 配置。GitHub 登录由这台 Mac 已有的 Git 凭据管理；若登录失效，页面会提示你先在终端完成登录。</p>
+  </main>
+</body>
+</html>

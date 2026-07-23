@@ -11,8 +11,14 @@ const providerService = require('../api/providerService');
 const uoomsg = require('../api/uoomsg');
 const { registerRejectedPhone, releaseRejectedPhone } = require('./rejectedPhones');
 const { generateCardCode } = require('../services/cardKeyCodes');
+const githubPublisher = require('../services/githubPublisher');
 
 const router = express.Router();
+
+function requireBetaPublisher(req, res, next) {
+  if (config.app.stage !== 'beta') return res.status(404).send('Page not found');
+  next();
+}
 
 function normalizePrefixEnabled(value) {
   if (Array.isArray(value)) return value.includes('1') ? 1 : 0;
@@ -29,6 +35,11 @@ function normalizePrefixMaxRequests(value) {
   return Math.min(20, Math.max(1, Number.isFinite(parsed) ? parsed : 20));
 }
 
+function normalizePrefixConcurrency(value) {
+  const parsed = parseInt(value, 10);
+  return Math.min(10, Math.max(1, Number.isFinite(parsed) ? parsed : 1));
+}
+
 function normalizePrefixRequestIntervalMs(value) {
   const parsedSeconds = parseFloat(value);
   const intervalMs = Number.isFinite(parsedSeconds) ? Math.round(parsedSeconds * 1000) : 500;
@@ -40,10 +51,20 @@ function normalizeCooldownSeconds(value) {
   return Math.min(3600, Math.max(10, Number.isFinite(parsed) ? parsed : 60));
 }
 
+function normalizeReleaseTimeoutMinutes(value) {
+  const parsed = parseInt(value, 10);
+  return Math.min(60, Math.max(1, Number.isFinite(parsed) ? parsed : 5));
+}
+
 function normalizeUsageRecordRetentionDays(value) {
   const parsed = parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
   return Math.min(3650, Math.max(1, parsed));
+}
+
+function normalizeCleanupAgeDays(value, fallback = 7) {
+  const parsed = parseInt(value, 10);
+  return Math.min(3650, Math.max(1, Number.isFinite(parsed) ? parsed : fallback));
 }
 
 function normalizeCardAttempts(value, fallback) {
@@ -67,6 +88,25 @@ function deleteUsageRecordsBefore(db, retentionDays) {
     db.exec('VACUUM');
   }
   return count;
+}
+
+function countCleanupRows(db, sql, params = []) {
+  return Number((db.prepare(sql).get(params) || {}).c || 0);
+}
+
+function getCleanupStats(db, retentionDays) {
+  const retention = normalizeUsageRecordRetentionDays(retentionDays);
+  const terminalJobStates = "('success', 'failed')";
+  return {
+    usageRecords: countCleanupRows(db, 'SELECT COUNT(*) AS c FROM usage_records'),
+    expiredUsageRecords: retention > 0
+      ? countCleanupRows(db, "SELECT COUNT(*) AS c FROM usage_records WHERE created_at < datetime('now', 'localtime', '-' || ? || ' days')", [retention])
+      : 0,
+    releasedRejected: countCleanupRows(db, 'SELECT COUNT(*) AS c FROM rejected_phones WHERE released=1'),
+    pendingRejected: countCleanupRows(db, 'SELECT COUNT(*) AS c FROM rejected_phones WHERE released=0'),
+    finishedJobs: countCleanupRows(db, `SELECT COUNT(*) AS c FROM phone_request_jobs WHERE state IN ${terminalJobStates}`),
+    activeJobs: countCleanupRows(db, "SELECT COUNT(*) AS c FROM phone_request_jobs WHERE state IN ('queued', 'running')")
+  };
 }
 
 function getProviders(db, activeOnly = false) {
@@ -225,6 +265,51 @@ router.post('/sync/import', requireAdmin, (req, res) => {
   }
 });
 
+// This center is deliberately only available on the local Beta instance.
+// The production/NAS process never receives a route that can execute Git.
+router.get('/publish', requireAdmin, requireBetaPublisher, async (req, res) => {
+  try {
+    const gitStatus = await githubPublisher.getGitStatus();
+    res.render('admin/publish', {
+      admin: req.session.admin,
+      gitStatus,
+      success: req.query.success || null,
+      error: req.query.error || null
+    });
+  } catch (error) {
+    res.status(500).render('admin/publish', {
+      admin: req.session.admin,
+      gitStatus: null,
+      success: null,
+      error: error.message || '暂时无法读取本地 Git 状态'
+    });
+  }
+});
+
+router.post('/publish/beta', requireAdmin, requireBetaPublisher, async (req, res) => {
+  try {
+    const result = await githubPublisher.publishBeta();
+    const text = result.createdCommit
+      ? `Beta 已发布到 GitHub，共提交 ${result.files.length} 个文件。`
+      : 'Beta 已发布到 GitHub，本地没有新的文件改动。';
+    res.redirect('/admin/publish?success=' + encodeURIComponent(text));
+  } catch (error) {
+    res.redirect('/admin/publish?error=' + encodeURIComponent(error.message || 'Beta 发布失败'));
+  }
+});
+
+router.post('/publish/release', requireAdmin, requireBetaPublisher, async (req, res) => {
+  try {
+    const result = await githubPublisher.publishRelease(req.body.version);
+    const text = result.createdCommit
+      ? `正式版 ${result.version} 已发布到 GitHub，共提交 ${result.files.length} 个文件。`
+      : `正式版 ${result.version} 已发布到 GitHub。`;
+    res.redirect('/admin/publish?success=' + encodeURIComponent(text));
+  } catch (error) {
+    res.redirect('/admin/publish?error=' + encodeURIComponent(error.message || '正式版发布失败'));
+  }
+});
+
 // Dashboard
 router.get('/dashboard', requireAdmin, (req, res) => {
   const db = getDb();
@@ -241,9 +326,6 @@ router.get('/dashboard', requireAdmin, (req, res) => {
 // API provider management
 router.get('/api-providers', requireAdmin, (req, res) => {
   const db = getDb();
-  const siteName = db.prepare("SELECT value FROM settings WHERE key='site_name'").get();
-  const releaseTimeout = db.prepare("SELECT value FROM settings WHERE key='release_timeout'").get();
-  const cooldownSec = db.prepare("SELECT value FROM settings WHERE key='cooldown_seconds'").get();
   const channels = db.prepare(`
     SELECT ch.id, ch.name, ch.channel_id, ch.operator, ch.scope, ch.api_keyword,
            ap.id AS provider_id, ap.name AS provider_name, ap.provider_type
@@ -263,9 +345,6 @@ router.get('/api-providers', requireAdmin, (req, res) => {
     providers: getProviders(db),
     channels,
     uoomsgProviders,
-    siteName: siteName && siteName.value ? siteName.value : '卡密接码',
-    releaseTimeout: releaseTimeout ? releaseTimeout.value : '5',
-    cooldownSeconds: cooldownSec ? cooldownSec.value : '60',
     error: req.query.error || null,
     success: req.query.success || null
   });
@@ -382,11 +461,12 @@ router.post('/channels/add', requireAdmin, (req, res) => {
   const prefixFilterMode = normalizePrefixFilterMode(req.body.prefix_filter_mode, req.body.prefix_enabled);
   const prefixEnabled = prefixFilterMode === 'disabled' ? 0 : 1;
   const prefixMaxRequests = normalizePrefixMaxRequests(req.body.prefix_max_requests);
+  const prefixConcurrency = Math.min(prefixMaxRequests, normalizePrefixConcurrency(req.body.prefix_concurrency));
   const prefixRequestIntervalMs = normalizePrefixRequestIntervalMs(req.body.prefix_request_interval_seconds);
   try {
     db.prepare(`
-      INSERT INTO channels (name, channel_id, provider_id, api_keyword, api_phone, api_province, api_card_type, operator, scope, prefix, prefix_enabled, prefix_filter_mode, prefix_max_requests, prefix_request_interval_ms, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO channels (name, channel_id, provider_id, api_keyword, api_phone, api_province, api_card_type, operator, scope, prefix, prefix_enabled, prefix_filter_mode, prefix_max_requests, prefix_concurrency, prefix_request_interval_ms, description)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run([
       name,
       String(channel_id || '').trim(),
@@ -401,6 +481,7 @@ router.post('/channels/add', requireAdmin, (req, res) => {
       prefixEnabled,
       prefixFilterMode,
       prefixMaxRequests,
+      prefixConcurrency,
       prefixRequestIntervalMs,
       description || ''
     ]);
@@ -421,11 +502,12 @@ router.post('/channels/edit/:id', requireAdmin, (req, res) => {
   const prefixFilterMode = normalizePrefixFilterMode(req.body.prefix_filter_mode, req.body.prefix_enabled);
   const prefixEnabled = prefixFilterMode === 'disabled' ? 0 : 1;
   const prefixMaxRequests = normalizePrefixMaxRequests(req.body.prefix_max_requests);
+  const prefixConcurrency = Math.min(prefixMaxRequests, normalizePrefixConcurrency(req.body.prefix_concurrency));
   const prefixRequestIntervalMs = normalizePrefixRequestIntervalMs(req.body.prefix_request_interval_seconds);
   try {
     db.prepare(`
       UPDATE channels
-      SET name=?, channel_id=?, provider_id=?, api_keyword=?, api_phone=?, api_province=?, api_card_type=?, operator=?, scope=?, prefix=?, prefix_enabled=?, prefix_filter_mode=?, prefix_max_requests=?, prefix_request_interval_ms=?, description=?, is_active=?
+      SET name=?, channel_id=?, provider_id=?, api_keyword=?, api_phone=?, api_province=?, api_card_type=?, operator=?, scope=?, prefix=?, prefix_enabled=?, prefix_filter_mode=?, prefix_max_requests=?, prefix_concurrency=?, prefix_request_interval_ms=?, description=?, is_active=?
       WHERE id=?
     `).run([
       name,
@@ -441,6 +523,7 @@ router.post('/channels/edit/:id', requireAdmin, (req, res) => {
       prefixEnabled,
       prefixFilterMode,
       prefixMaxRequests,
+      prefixConcurrency,
       prefixRequestIntervalMs,
       description || '',
       parseInt(is_active || 0),
@@ -713,11 +796,18 @@ router.post('/api/uoomsg/history', requireAdmin, async (req, res) => {
 
 // Settings
 router.get('/settings', requireAdmin, (req, res) => {
-  const query = new URLSearchParams();
-  if (req.query.success) query.set('success', req.query.success);
-  if (req.query.error) query.set('error', req.query.error);
-  const suffix = query.toString() ? '?' + query.toString() : '';
-  res.redirect('/admin/api-providers' + suffix);
+  const db = getDb();
+  const siteName = db.prepare("SELECT value FROM settings WHERE key='site_name'").get();
+  const releaseTimeout = db.prepare("SELECT value FROM settings WHERE key='release_timeout'").get();
+  const cooldownSeconds = db.prepare("SELECT value FROM settings WHERE key='cooldown_seconds'").get();
+  res.render('admin/settings', {
+    admin: req.session.admin,
+    siteName: siteName && siteName.value ? siteName.value : '卡密接码',
+    releaseTimeout: normalizeReleaseTimeoutMinutes(releaseTimeout && releaseTimeout.value),
+    cooldownSeconds: normalizeCooldownSeconds(cooldownSeconds && cooldownSeconds.value),
+    success: req.query.success || null,
+    error: req.query.error || null
+  });
 });
 
 router.post('/settings', requireAdmin, (req, res) => {
@@ -725,8 +815,11 @@ router.post('/settings', requireAdmin, (req, res) => {
   const { qc86_username, qc86_password, qc86_token } = req.body;
   const siteName = String(req.body.site_name || '').trim().slice(0, 40) || '卡密接码';
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('site_name', ?)").run([siteName]);
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('release_timeout', ?)").run([req.body.release_timeout || '5']);
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('default_channel_id', ?)").run([req.body.default_channel_id || '']);
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('release_timeout', ?)").run([String(normalizeReleaseTimeoutMinutes(req.body.release_timeout))]);
+  // 兼容旧版表单：只有明确提交默认项目时才更新，独立网站设置页不会误清空旧值。
+  if (Object.prototype.hasOwnProperty.call(req.body, 'default_channel_id')) {
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('default_channel_id', ?)").run([req.body.default_channel_id || '']);
+  }
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('cooldown_seconds', ?)").run([String(normalizeCooldownSeconds(req.body.cooldown_seconds))]);
   // API 凭证在统一的 API 服务商编辑窗口保存；这里不触碰凭证，避免保存运行参数时清空旧 qc86 配置。
   if (String(qc86_username || '').trim() || String(qc86_password || '') || String(qc86_token || '').trim()) {
@@ -742,7 +835,7 @@ router.post('/settings', requireAdmin, (req, res) => {
     db.prepare(`UPDATE api_providers SET username=?, password=?, token=? WHERE provider_type='qc86' AND is_system=1`).run([username, password, token]);
   }
   saveDb();
-   res.redirect('/admin/api-providers?success=设置保存成功');
+  res.redirect('/admin/settings?success=' + encodeURIComponent('设置保存成功'));
 });
 
 router.post('/settings/get-token', requireAdmin, async (req, res) => {
@@ -766,8 +859,53 @@ router.post('/settings/get-token', requireAdmin, async (req, res) => {
 // Rejected phones page
 router.get('/rejected', requireAdmin, (req, res) => {
   const db = getDb();
-  const rejected = db.prepare('SELECT * FROM rejected_phones ORDER BY id DESC LIMIT 200').all();
-  res.render('admin/rejected', { admin: req.session.admin, rejected });
+  const pageSize = 100;
+  const requestedPage = parseInt(req.query.page, 10);
+  const status = ['all', 'pending', 'released'].includes(req.query.status) ? req.query.status : 'all';
+  const searchQuery = String(req.query.q || '').trim().slice(0, 80);
+  const where = [];
+  const params = [];
+
+  if (status === 'pending') {
+    where.push('released=0');
+  } else if (status === 'released') {
+    where.push('released=1');
+  }
+
+  if (searchQuery) {
+    const searchTerm = '%' + searchQuery + '%';
+    where.push('(phone_number LIKE ? OR channel_name LIKE ? OR reason LIKE ?)');
+    params.push(searchTerm, searchTerm, searchTerm);
+  }
+
+  const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const filteredTotal = Number((db.prepare(`SELECT COUNT(*) AS c FROM rejected_phones ${whereSql}`).get(params) || {}).c || 0);
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / pageSize));
+  const currentPage = Math.min(totalPages, Math.max(1, Number.isFinite(requestedPage) ? requestedPage : 1));
+  const offset = (currentPage - 1) * pageSize;
+  const rejected = db.prepare(`SELECT * FROM rejected_phones ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    .all(params.concat([pageSize, offset]));
+  const stats = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN released=0 THEN 1 ELSE 0 END) AS pending,
+      SUM(CASE WHEN released=1 THEN 1 ELSE 0 END) AS released
+    FROM rejected_phones
+  `).get() || {};
+
+  res.render('admin/rejected', {
+    admin: req.session.admin,
+    rejected,
+    totalCount: Number(stats.total || 0),
+    pendingCount: Number(stats.pending || 0),
+    releasedCount: Number(stats.released || 0),
+    filteredTotal,
+    currentPage,
+    totalPages,
+    pageSize,
+    status,
+    searchQuery
+  });
 });
 
 // Release a specific rejected phone (admin action)
@@ -858,6 +996,96 @@ router.post('/records/clear', requireAdmin, (req, res) => {
   }
   saveDb();
   res.redirect('/admin/records?success=' + encodeURIComponent('已清空 ' + count + ' 条使用记录，并已压缩数据库'));
+});
+
+// Data cleanup center. It intentionally only touches completed history data;
+// card keys, projects, providers and active phone allocation tasks are kept.
+router.get('/cleanup', requireAdmin, (req, res) => {
+  const db = getDb();
+  const retentionRow = db.prepare("SELECT value FROM settings WHERE key='usage_record_retention_days'").get();
+  const retentionDays = normalizeUsageRecordRetentionDays((retentionRow || {}).value || '90');
+  res.render('admin/cleanup', {
+    admin: req.session.admin,
+    retentionDays,
+    stats: getCleanupStats(db, retentionDays),
+    success: req.query.success || null,
+    error: req.query.error || null
+  });
+});
+
+router.post('/cleanup/retention', requireAdmin, (req, res) => {
+  const db = getDb();
+  const retentionDays = normalizeUsageRecordRetentionDays(req.body.retention_days);
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('usage_record_retention_days', ?)").run([String(retentionDays)]);
+  const removed = deleteUsageRecordsBefore(db, retentionDays);
+  saveDb();
+  const message = retentionDays === 0
+    ? '已关闭使用记录自动清理'
+    : '已设置保留 ' + retentionDays + ' 天，并清理 ' + removed + ' 条过期使用记录';
+  res.redirect('/admin/cleanup?success=' + encodeURIComponent(message));
+});
+
+router.post('/cleanup/usage-records', requireAdmin, (req, res) => {
+  const db = getDb();
+  const scope = req.body.scope === 'all' ? 'all' : 'expired';
+  const retentionRow = db.prepare("SELECT value FROM settings WHERE key='usage_record_retention_days'").get();
+  const retentionDays = normalizeUsageRecordRetentionDays((retentionRow || {}).value || '90');
+  let count = 0;
+
+  if (scope === 'all') {
+    count = countCleanupRows(db, 'SELECT COUNT(*) AS c FROM usage_records');
+    if (count > 0) db.prepare('DELETE FROM usage_records').run();
+  } else if (retentionDays > 0) {
+    count = countCleanupRows(db, "SELECT COUNT(*) AS c FROM usage_records WHERE created_at < datetime('now', 'localtime', '-' || ? || ' days')", [retentionDays]);
+    if (count > 0) {
+      db.prepare("DELETE FROM usage_records WHERE created_at < datetime('now', 'localtime', '-' || ? || ' days')").run([retentionDays]);
+    }
+  }
+
+  if (count > 0) saveDb();
+  const message = scope === 'all'
+    ? '已删除 ' + count + ' 条使用记录'
+    : retentionDays === 0
+      ? '自动保留已关闭，未删除任何使用记录'
+      : '已删除 ' + count + ' 条超过 ' + retentionDays + ' 天的使用记录';
+  res.redirect('/admin/cleanup?success=' + encodeURIComponent(message));
+});
+
+router.post('/cleanup/released-rejected', requireAdmin, (req, res) => {
+  const db = getDb();
+  const days = normalizeCleanupAgeDays(req.body.older_than_days, 7);
+  const count = countCleanupRows(
+    db,
+    "SELECT COUNT(*) AS c FROM rejected_phones WHERE released=1 AND rejected_at < datetime('now', 'localtime', '-' || ? || ' days')",
+    [days]
+  );
+  if (count > 0) {
+    db.prepare("DELETE FROM rejected_phones WHERE released=1 AND rejected_at < datetime('now', 'localtime', '-' || ? || ' days')").run([days]);
+    saveDb();
+  }
+  res.redirect('/admin/cleanup?success=' + encodeURIComponent('已删除 ' + count + ' 条已释放且超过 ' + days + ' 天的号段过滤记录'));
+});
+
+router.post('/cleanup/finished-phone-jobs', requireAdmin, (req, res) => {
+  const db = getDb();
+  const days = normalizeCleanupAgeDays(req.body.older_than_days, 7);
+  const count = countCleanupRows(
+    db,
+    "SELECT COUNT(*) AS c FROM phone_request_jobs WHERE state IN ('success', 'failed') AND COALESCE(completed_at, updated_at, created_at) < datetime('now', 'localtime', '-' || ? || ' days')",
+    [days]
+  );
+  if (count > 0) {
+    db.prepare("DELETE FROM phone_request_jobs WHERE state IN ('success', 'failed') AND COALESCE(completed_at, updated_at, created_at) < datetime('now', 'localtime', '-' || ? || ' days')").run([days]);
+    saveDb();
+  }
+  res.redirect('/admin/cleanup?success=' + encodeURIComponent('已删除 ' + count + ' 条已结束且超过 ' + days + ' 天的取号任务'));
+});
+
+router.post('/cleanup/vacuum', requireAdmin, (req, res) => {
+  const db = getDb();
+  db.exec('VACUUM');
+  saveDb();
+  res.redirect('/admin/cleanup?success=' + encodeURIComponent('数据库空间已整理完成'));
 });
 
 // Batch delete cards

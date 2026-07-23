@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据清理 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .cleanup-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+    .cleanup-heading h2 { margin:0 0 6px; }
+    .cleanup-heading p { margin:0; color:#6e6e73; font-size:13px; line-height:1.55; }
+    .cleanup-summary { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; margin-bottom:16px; }
+    .cleanup-stat { min-width:0; padding:14px; border:1px solid #e8e8ed; border-radius:8px; background:#fff; }
+    .cleanup-stat strong { display:block; margin-top:4px; color:#1d1d1f; font-size:24px; line-height:1; }
+    .cleanup-stat span { color:#6e6e73; font-size:12px; }
+    .cleanup-stack { display:grid; gap:12px; }
+    .cleanup-card { border:1px solid #e8e8ed; border-radius:8px; background:#fff; }
+    .cleanup-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px; }
+    .cleanup-row + .cleanup-row { border-top:1px solid #ededf0; }
+    .cleanup-title { margin:0 0 5px; color:#1d1d1f; font-size:15px; }
+    .cleanup-copy { margin:0; color:#6e6e73; font-size:12px; line-height:1.55; max-width:640px; }
+    .cleanup-copy strong { color:#3a3a3c; font-weight:650; }
+    .cleanup-action { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+    .cleanup-action select { min-height:34px; padding:6px 8px; border:1px solid #d7d7dc; border-radius:7px; background:#fff; color:#303036; font-size:12px; }
+    .cleanup-note { margin-top:14px; padding:12px 14px; border-left:3px solid #34c759; background:#f5fbf7; color:#4c6253; font-size:12px; line-height:1.55; }
+    @media (max-width:760px) { .cleanup-summary { grid-template-columns:repeat(2, minmax(0, 1fr)); } .cleanup-row { align-items:stretch; flex-direction:column; gap:12px; padding:15px; } .cleanup-action { width:100%; flex-wrap:wrap; } .cleanup-action .btn-apple { flex:1 1 auto; } }
+    @media (max-width:420px) { .cleanup-summary { grid-template-columns:1fr 1fr; gap:8px; } .cleanup-stat { padding:12px; } .cleanup-stat strong { font-size:21px; } }
+  </style>
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'cleanup' }) %>
+  <main class="main">
+    <div class="cleanup-heading">
+      <div>
+        <h2>数据清理</h2>
+        <p>只整理不再需要的历史数据，让后台更轻快、记录更清楚。</p>
+      </div>
+    </div>
+
+    <% if (success) { %><div class="message message-success"><%= success %></div><% } %>
+    <% if (error) { %><div class="message message-error"><%= error %></div><% } %>
+
+    <section class="cleanup-summary" aria-label="当前数据概览">
+      <div class="cleanup-stat"><span>使用记录</span><strong><%= stats.usageRecords %></strong></div>
+      <div class="cleanup-stat"><span>已释放过滤记录</span><strong><%= stats.releasedRejected %></strong></div>
+      <div class="cleanup-stat"><span>已结束取号任务</span><strong><%= stats.finishedJobs %></strong></div>
+    </section>
+
+    <section class="cleanup-stack" aria-label="清理操作">
+      <div class="cleanup-card">
+        <div class="cleanup-row">
+          <div><h3 class="cleanup-title">使用记录自动保留</h3><p class="cleanup-copy">当前保留 <strong><%= retentionDays === 0 ? '全部历史记录' : retentionDays + ' 天' %></strong>。网站启动时和每 6 小时会自动清理超过保留期限的日志。</p></div>
+          <form class="cleanup-action" action="/admin/cleanup/retention" method="POST">
+            <select name="retention_days" aria-label="使用记录保留天数">
+              <option value="7" <%= retentionDays === 7 ? 'selected' : '' %>>保留 7 天</option>
+              <option value="30" <%= retentionDays === 30 ? 'selected' : '' %>>保留 30 天</option>
+              <option value="90" <%= retentionDays === 90 ? 'selected' : '' %>>保留 90 天</option>
+              <option value="180" <%= retentionDays === 180 ? 'selected' : '' %>>保留 180 天</option>
+              <option value="365" <%= retentionDays === 365 ? 'selected' : '' %>>保留 1 年</option>
+              <option value="0" <%= retentionDays === 0 ? 'selected' : '' %>>不自动清理</option>
+            </select>
+            <button class="btn-apple btn-apple-primary btn-apple-sm" type="submit">保存规则</button>
+          </form>
+        </div>
+        <div class="cleanup-row">
+          <div><h3 class="cleanup-title">清理过期使用记录</h3><p class="cleanup-copy">当前可清理 <strong><%= stats.expiredUsageRecords %></strong> 条超过保留期限的记录。不会删除卡密、项目、当前手机号或验证码状态。</p></div>
+          <form class="cleanup-action" action="/admin/cleanup/usage-records" method="POST" onsubmit="return confirm('确定删除超过保留期限的使用记录吗？卡密、项目和当前接码不会受影响。');">
+            <input type="hidden" name="scope" value="expired">
+            <button class="btn-apple btn-apple-secondary btn-apple-sm" type="submit">清理过期记录</button>
+          </form>
+        </div>
+        <div class="cleanup-row">
+          <div><h3 class="cleanup-title">清空全部使用记录</h3><p class="cleanup-copy">删除全部 <strong><%= stats.usageRecords %></strong> 条使用日志。只用于需要重新开始统计时，操作无法恢复。</p></div>
+          <form class="cleanup-action" action="/admin/cleanup/usage-records" method="POST" onsubmit="return confirm('确定清空全部使用记录吗？此操作不可恢复，但不会删除卡密、项目和 API 配置。');">
+            <input type="hidden" name="scope" value="all">
+            <button class="btn-apple btn-apple-danger btn-apple-sm" type="submit">清空使用记录</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="cleanup-card">
+        <div class="cleanup-row">
+          <div><h3 class="cleanup-title">清理已释放的号段过滤记录</h3><p class="cleanup-copy">只删除已经成功释放的历史条目。仍在等待释放的 <strong><%= stats.pendingRejected %></strong> 条记录会保留，确保号码仍会自动释放。</p></div>
+          <form class="cleanup-action" action="/admin/cleanup/released-rejected" method="POST" onsubmit="return confirm('确定清理已释放的号段过滤记录吗？未释放的号码不会被删除。');">
+            <select name="older_than_days" aria-label="号段过滤记录保留天数"><option value="1">超过 1 天</option><option value="7" selected>超过 7 天</option><option value="30">超过 30 天</option><option value="90">超过 90 天</option></select>
+            <button class="btn-apple btn-apple-secondary btn-apple-sm" type="submit">清理已释放记录</button>
+          </form>
+        </div>
+        <div class="cleanup-row">
+          <div><h3 class="cleanup-title">清理已结束的取号任务</h3><p class="cleanup-copy">只删除成功或失败的旧任务。正在排队或筛选中的 <strong><%= stats.activeJobs %></strong> 个任务会保留，不会中断用户正在获取的手机号。</p></div>
+          <form class="cleanup-action" action="/admin/cleanup/finished-phone-jobs" method="POST" onsubmit="return confirm('确定清理已结束的取号任务吗？正在进行的任务不会受影响。');">
+            <select name="older_than_days" aria-label="取号任务保留天数"><option value="1">超过 1 天</option><option value="7" selected>超过 7 天</option><option value="30">超过 30 天</option><option value="90">超过 90 天</option></select>
+            <button class="btn-apple btn-apple-secondary btn-apple-sm" type="submit">清理结束任务</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="cleanup-card">
+        <div class="cleanup-row">
+          <div><h3 class="cleanup-title">整理数据库空间</h3><p class="cleanup-copy">删除历史数据后可执行一次，让数据库文件回收空白空间。不会删除任何数据；数据量很大时会短暂占用后台。</p></div>
+          <form class="cleanup-action" action="/admin/cleanup/vacuum" method="POST" onsubmit="return confirm('现在整理数据库空间吗？整理期间请不要重复点击其他清理操作。');"><button class="btn-apple btn-apple-primary btn-apple-sm" type="submit">整理空间</button></form>
+        </div>
+      </div>
+    </section>
+
+    <p class="cleanup-note">安全边界：此页面不会删除卡密、项目、API 服务商、管理员账号、未释放号码，或正在进行中的取号任务。</p>
+  </main>
+</body>
+</html>

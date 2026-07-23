@@ -150,6 +150,41 @@ async function run() {
     uoomsg.getPhone = originalGetPhone;
   }
 
+  const concurrentSequence = ['13100000011', '13200000012', '17099999998'];
+  const concurrentRejected = [];
+  let activeRequests = 0;
+  let peakRequests = 0;
+  uoomsg.getPhone = async () => {
+    activeRequests += 1;
+    peakRequests = Math.max(peakRequests, activeRequests);
+    const phone = concurrentSequence.shift();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    activeRequests -= 1;
+    return { success: true, data: { mobile: phone } };
+  };
+  try {
+    const result = await providerService.getPhoneWithPrefix(provider, {
+      ...channel,
+      api_phone: '',
+      prefix: '170',
+      prefix_enabled: 1,
+      prefix_max_requests: 3,
+      prefix_concurrency: 2,
+      prefix_request_interval_ms: 500
+    }, {
+      token: provider.token,
+      onRejected: phone => concurrentRejected.push(phone)
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.data.mobile, '17099999998');
+    assert.equal(result.requestCount, 3);
+    assert.equal(result.concurrency, 2);
+    assert.equal(peakRequests, 2);
+    assert.deepEqual(concurrentRejected.sort(), ['13100000011', '13200000012']);
+  } finally {
+    uoomsg.getPhone = originalGetPhone;
+  }
+
   console.log('uoomsg mock API tests passed');
 }
 

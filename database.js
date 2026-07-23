@@ -148,6 +148,7 @@ async function initDb() {
       prefix_enabled INTEGER DEFAULT 1,
       prefix_filter_mode TEXT DEFAULT 'include',
       prefix_max_requests INTEGER DEFAULT 20,
+      prefix_concurrency INTEGER DEFAULT 1,
       prefix_request_interval_ms INTEGER DEFAULT 500,
       description TEXT DEFAULT '',
       is_active INTEGER DEFAULT 1,
@@ -237,6 +238,7 @@ async function initDb() {
   try { db.exec("ALTER TABLE channels ADD COLUMN prefix_enabled INTEGER DEFAULT 1"); } catch(e) {}
   try { db.exec("ALTER TABLE channels ADD COLUMN prefix_filter_mode TEXT DEFAULT 'include'"); } catch(e) {}
   try { db.exec("ALTER TABLE channels ADD COLUMN prefix_max_requests INTEGER DEFAULT 20"); } catch(e) {}
+  try { db.exec("ALTER TABLE channels ADD COLUMN prefix_concurrency INTEGER DEFAULT 1"); } catch(e) {}
   try { db.exec("ALTER TABLE channels ADD COLUMN prefix_request_interval_ms INTEGER DEFAULT 500"); } catch(e) {}
   try { db.exec("ALTER TABLE channels ADD COLUMN provider_id INTEGER"); } catch(e) {}
   try { db.exec("ALTER TABLE channels ADD COLUMN api_keyword TEXT DEFAULT ''"); } catch(e) {}
@@ -252,6 +254,7 @@ async function initDb() {
   try { db.exec("UPDATE channels SET prefix_enabled=1 WHERE prefix_enabled IS NULL"); } catch(e) {}
   try { db.exec("UPDATE channels SET prefix_filter_mode='include' WHERE prefix_filter_mode IS NULL OR prefix_filter_mode NOT IN ('include', 'exclude', 'disabled')"); } catch(e) {}
   try { db.exec("UPDATE channels SET prefix_max_requests=20 WHERE prefix_max_requests IS NULL OR prefix_max_requests < 1 OR prefix_max_requests > 20"); } catch(e) {}
+  try { db.exec("UPDATE channels SET prefix_concurrency=1 WHERE prefix_concurrency IS NULL OR prefix_concurrency < 1 OR prefix_concurrency > 10"); } catch(e) {}
   try { db.exec("UPDATE channels SET prefix_request_interval_ms=500 WHERE prefix_request_interval_ms IS NULL OR prefix_request_interval_ms < 500 OR prefix_request_interval_ms > 10000"); } catch(e) {}
   // A card whose allocation quota is exhausted is no longer available for a
   // new phone, even when it has not received an SMS yet. Repair old rows that

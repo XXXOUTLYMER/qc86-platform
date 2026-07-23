@@ -20,6 +20,20 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '20mb' }));
+
+// Card pages contain live card state. Do not let a browser restore an old
+// rendered page after a submit, refresh, or back/forward navigation.
+app.use((req, res, next) => {
+  if (req.method === 'GET' && req.accepts(['html']) === 'html') {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      Pragma: 'no-cache',
+      Expires: '0'
+    });
+  }
+  next();
+});
+
 if (config.server.secureCookie) app.set('trust proxy', 1);
 app.use(session({
   secret: config.server.sessionSecret,
@@ -32,6 +46,15 @@ app.use(session({
     secure: config.server.secureCookie
   }
 }));
+
+// Expose only the current build identity to templates. No credentials or
+// environment settings are made available to rendered pages.
+app.use((req, res, next) => {
+  res.locals.appVersion = config.app.version;
+  res.locals.appStage = config.app.stage;
+  res.locals.appVersionLabel = config.app.label;
+  next();
+});
 
 // Routes
 app.use('/', userRoutes);
@@ -54,7 +77,11 @@ app.get('/api/balance', (req, res) => {
 
 // Used by Docker to confirm that the application has started successfully.
 app.get('/health', (req, res) => {
-  res.status(200).json({ ok: true });
+  res.status(200).json({
+    ok: true,
+    version: config.app.version,
+    stage: config.app.stage
+  });
 });
 
 // 404 handler
@@ -78,14 +105,11 @@ function cleanupUsageRecords(db) {
   return count;
 }
 
-async function start() {
+async function initializeApp() {
   await initDb();
   const pendingRejected = resumePendingRejectedPhoneReleases();
   const pendingPhoneRequests = resumePhoneRequestJobs();
   const oldRecordCount = cleanupUsageRecords(getDb());
-  console.log(`QC86 Platform running on http://localhost:${config.server.port}`);
-  console.log(`Admin login: http://localhost:${config.server.port}/admin/login`);
-  console.log(`Default admin password: admin123`);
   if (pendingRejected > 0) console.log('Resumed ' + pendingRejected + ' pending rejected-phone releases');
   if (pendingPhoneRequests > 0) console.log('Resumed ' + pendingPhoneRequests + ' pending phone request jobs');
   if (oldRecordCount > 0) console.log('Cleanup: removed ' + oldRecordCount + ' old usage records');
@@ -127,16 +151,33 @@ async function start() {
   if (recordCleanupTimer.unref) recordCleanupTimer.unref();
 }
 
-const server = app.listen(config.server.port, () => {
-  start().catch(e => {
-    console.error('Failed to initialize database:', e);
-    process.exit(1);
+let server = null;
+
+// Do not accept requests until the database, migrations, and recovery tasks
+// are ready. Opening the admin pages during the old startup window could make
+// a route render against an uninitialized database and show a blank page.
+async function startServer() {
+  await initializeApp();
+  server = app.listen(config.server.port, () => {
+    console.log(`QC86 Platform running on http://localhost:${config.server.port}`);
+    console.log(`Admin login: http://localhost:${config.server.port}/admin/login`);
   });
+}
+
+startServer().catch(error => {
+  console.error('Failed to initialize database:', error);
+  closeDb();
+  process.exit(1);
 });
 
 // Graceful shutdown: save database and close
 function shutdown(signal) {
   console.log(`\nReceived ${signal}, shutting down gracefully...`);
+  if (!server) {
+    closeDb();
+    process.exit(0);
+    return;
+  }
   server.close(() => {
     closeDb();
     console.log('Database saved and closed.');

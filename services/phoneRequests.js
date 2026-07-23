@@ -52,6 +52,7 @@ function getPrefixOptions(card, channel) {
   return {
     enabled: channel.prefix_enabled,
     maxRequests: channel.prefix_max_requests,
+    concurrency: channel.prefix_concurrency,
     requestIntervalMs: channel.prefix_request_interval_ms,
     onRejected(phone, attempt, rejection) {
       registerRejectedPhone({
@@ -65,7 +66,9 @@ function getPrefixOptions(card, channel) {
     },
     onProgress(progress) {
       const job = getPhoneRequestJob(card.id) || {};
-      updateJob(card.id, 'running', '正在逐个筛选指定号段的号码', {
+      const totalRequests = Math.min(20, Math.max(1, parseInt(progress.maxRequests, 10) || 1));
+      const concurrency = Math.min(totalRequests, Math.min(10, Math.max(1, parseInt(channel.prefix_concurrency, 10) || 1)));
+      updateJob(card.id, 'running', concurrency > 1 ? '正在并发筛选指定号段的号码' : '正在逐个筛选指定号段的号码', {
         requestCount: progress.attempt,
         maxRequests: progress.maxRequests,
         attemptCounted: job.attempt_counted

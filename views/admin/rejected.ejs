@@ -94,7 +94,8 @@
       border-radius: 8px;
       background: #f2f2f7;
     }
-    .status-filter button {
+    .status-filter button,
+    .status-filter a {
       min-height: 30px;
       padding: 5px 11px;
       border: 0;
@@ -104,10 +105,13 @@
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
+      text-decoration: none;
       transition: background .15s ease, color .15s ease, box-shadow .15s ease;
     }
-    .status-filter button:hover { color: #1d1d1f; }
-    .status-filter button.active {
+    .status-filter button:hover,
+    .status-filter a:hover { color: #1d1d1f; }
+    .status-filter button.active,
+    .status-filter a.active {
       background: #fff;
       color: #1d1d1f;
       box-shadow: 0 1px 4px rgba(0, 0, 0, .1);
@@ -142,6 +146,35 @@
       background: #fff;
       box-shadow: 0 0 0 3px rgba(0, 0, 0, .06);
     }
+    .records-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 16px;
+      border-top: 1px solid #ededf0;
+      color: #86868b;
+      font-size: 12px;
+    }
+    .pagination-actions { display: inline-flex; align-items: center; gap: 7px; }
+    .pagination-link,
+    .pagination-disabled {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 64px;
+      min-height: 31px;
+      padding: 5px 10px;
+      border: 1px solid #dedee3;
+      border-radius: 7px;
+      background: #fff;
+      color: #1d1d1f;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .pagination-link:hover { border-color: #b8b8bd; background: #f5f5f7; }
+    .pagination-disabled { color: #b0b0b5; background: #fafafa; cursor: not-allowed; }
 
     .rejected-table { width: 100%; }
     .rejected-table thead th {
@@ -271,6 +304,9 @@
       .status-filter { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
       .records-search { width: 100%; }
       .records-search input { height: 40px; font-size: 16px; }
+      .records-pagination { align-items: stretch; flex-direction: column; padding: 12px; text-align: center; }
+      .pagination-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+      .pagination-link, .pagination-disabled { width: 100%; min-height: 38px; }
 
       .rejected-table thead { display: none; }
       .rejected-table tbody { display: block; padding: 8px; }
@@ -317,9 +353,8 @@
 <body>
   <%- include('partials/header', { admin, active: 'rejected' }) %>
   <%
-    var totalCount = rejected.length;
-    var pendingCount = rejected.filter(function(record) { return !record.released; }).length;
-    var releasedCount = totalCount - pendingCount;
+    var filterQuery = searchQuery ? '&q=' + encodeURIComponent(searchQuery) : '';
+    var pageQuery = 'status=' + encodeURIComponent(status) + filterQuery;
   %>
   <main class="main rejected-page">
     <div class="rejected-heading">
@@ -349,23 +384,24 @@
     </section>
 
     <section class="records-panel">
-      <% if (totalCount === 0) { %>
+      <% if (filteredTotal === 0) { %>
         <div class="empty-panel">
-          <div class="empty-panel-icon" aria-hidden="true">✓</div>
-          <strong>暂无过滤记录</strong>
-          <span>不符合指定号段的号码会显示在这里。</span>
+          <div class="empty-panel-icon" aria-hidden="true"><%= totalCount === 0 ? '✓' : '⌕' %></div>
+          <strong><%= totalCount === 0 ? '暂无过滤记录' : '没有匹配的记录' %></strong>
+          <span><%= totalCount === 0 ? '不符合指定号段的号码会显示在这里。' : '换一个手机号、项目名称或状态试试。' %></span>
         </div>
       <% } else { %>
         <div class="records-controls">
           <div class="status-filter" role="group" aria-label="记录状态筛选">
-            <button type="button" class="active" data-filter="all" onclick="setFilter(this, 'all')">全部 <%= totalCount %></button>
-            <button type="button" data-filter="pending" onclick="setFilter(this, 'pending')">待释放 <%= pendingCount %></button>
-            <button type="button" data-filter="released" onclick="setFilter(this, 'released')">已释放 <%= releasedCount %></button>
+            <a class="<%= status === 'all' ? 'active' : '' %>" href="/admin/rejected?status=all<%= filterQuery %>">全部 <%= totalCount %></a>
+            <a class="<%= status === 'pending' ? 'active' : '' %>" href="/admin/rejected?status=pending<%= filterQuery %>">待释放 <%= pendingCount %></a>
+            <a class="<%= status === 'released' ? 'active' : '' %>" href="/admin/rejected?status=released<%= filterQuery %>">已释放 <%= releasedCount %></a>
           </div>
-          <label class="records-search">
+          <form class="records-search" method="get" action="/admin/rejected">
+            <input type="hidden" name="status" value="<%= status %>">
             <span aria-hidden="true">⌕</span>
-            <input id="recordSearch" type="search" placeholder="搜索手机号或项目" autocomplete="off" oninput="applyFilters()">
-          </label>
+            <input id="recordSearch" name="q" type="search" value="<%= searchQuery %>" placeholder="搜索手机号或项目" autocomplete="off" maxlength="80">
+          </form>
         </div>
 
         <div class="table-wrap">
@@ -407,11 +443,23 @@
             </tbody>
           </table>
         </div>
-        <div class="empty-panel no-results" id="noResults">
-          <div class="empty-panel-icon" aria-hidden="true">⌕</div>
-          <strong>没有匹配的记录</strong>
-          <span>换一个手机号、项目名称或状态试试。</span>
+        <% if (totalPages > 1) { %>
+        <div class="records-pagination" aria-label="分页">
+          <span>第 <strong><%= currentPage %></strong> / <strong><%= totalPages %></strong> 页，共 <strong><%= filteredTotal %></strong> 条</span>
+          <div class="pagination-actions">
+            <% if (currentPage > 1) { %>
+              <a class="pagination-link" href="/admin/rejected?<%= pageQuery %>&page=<%= currentPage - 1 %>">上一页</a>
+            <% } else { %>
+              <span class="pagination-disabled">上一页</span>
+            <% } %>
+            <% if (currentPage < totalPages) { %>
+              <a class="pagination-link" href="/admin/rejected?<%= pageQuery %>&page=<%= currentPage + 1 %>">下一页</a>
+            <% } else { %>
+              <span class="pagination-disabled">下一页</span>
+            <% } %>
+          </div>
         </div>
+        <% } %>
       <% } %>
     </section>
   </main>
@@ -419,8 +467,6 @@
   <div class="page-toast" id="pageToast" role="status" aria-live="polite"></div>
 
   <script>
-    var activeFilter = 'all';
-
     function showToast(message, isError) {
       var toast = document.getElementById('pageToast');
       if (!toast) return;
@@ -429,31 +475,6 @@
       toast.classList.add('show');
       window.clearTimeout(showToast.timer);
       showToast.timer = window.setTimeout(function() { toast.classList.remove('show'); }, 2200);
-    }
-
-    function setFilter(button, filter) {
-      activeFilter = filter;
-      document.querySelectorAll('.status-filter button').forEach(function(item) {
-        item.classList.toggle('active', item === button);
-      });
-      applyFilters();
-    }
-
-    function applyFilters() {
-      var searchInput = document.getElementById('recordSearch');
-      var keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
-      var visibleCount = 0;
-      document.querySelectorAll('#recordRows tr').forEach(function(row) {
-        var matchesStatus = activeFilter === 'all' || row.dataset.status === activeFilter;
-        var matchesSearch = !keyword || String(row.dataset.search || '').toLowerCase().includes(keyword);
-        var visible = matchesStatus && matchesSearch;
-        row.style.display = visible ? '' : 'none';
-        if (visible) visibleCount += 1;
-      });
-      var noResults = document.getElementById('noResults');
-      var tableWrap = document.querySelector('.records-panel .table-wrap');
-      if (noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
-      if (tableWrap) tableWrap.style.display = visibleCount === 0 ? 'none' : 'block';
     }
 
     function releaseOne(id, button) {

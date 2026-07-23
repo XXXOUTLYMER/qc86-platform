@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网站设置 - 卡密接码平台</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .settings-page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:18px; }
+    .settings-page-header h2 { margin:0 0 6px; }
+    .settings-page-header p { margin:0; max-width:590px; color:#6e6e73; font-size:13px; line-height:1.55; }
+    .settings-card { max-width:820px; }
+    .settings-card-head { display:flex; align-items:flex-start; gap:12px; padding-bottom:16px; margin-bottom:18px; border-bottom:1px solid #ececf0; }
+    .settings-card-icon { flex:0 0 auto; display:grid; width:36px; height:36px; place-items:center; border-radius:9px; background:#eff7f2; color:#218452; font-size:17px; }
+    .settings-card-head h3 { margin:0 0 4px; color:#1d1d1f; }
+    .settings-card-head p { margin:0; color:#6e6e73; font-size:13px; line-height:1.5; }
+    .site-settings-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:14px; }
+    .site-settings-grid .form-group { margin:0; }
+    .site-settings-grid input { max-width:none; min-height:40px; box-sizing:border-box; }
+    .settings-hint { margin:16px 0 18px; padding:11px 12px; border:1px solid #e1ece4; border-radius:7px; background:#f7fbf8; color:#52705d; font-size:12px; line-height:1.55; }
+    .settings-actions { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #ececf0; padding-top:16px; }
+    .settings-actions .btn { min-height:38px; }
+    @media (max-width:760px) {
+      .settings-page-header { display:block; }
+      .settings-card { max-width:none; }
+      .site-settings-grid { grid-template-columns:1fr; gap:12px; }
+      .settings-actions { justify-content:stretch; }
+      .settings-actions .btn { width:100%; text-align:center; }
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/header', { admin, active: 'settings' }) %>
+  <main class="main">
+    <div class="settings-page-header">
+      <div>
+        <h2>网站设置</h2>
+        <p>管理全站显示与号码领取规则。API 平台的账号、Token 和接口地址请在“API 对接”中单独维护。</p>
+      </div>
+    </div>
+
+    <% if (success) { %><div class="message message-success"><%= success %></div><% } %>
+    <% if (error) { %><div class="message message-error"><%= error %></div><% } %>
+
+    <section class="card settings-card">
+      <div class="card-body">
+        <div class="settings-card-head">
+          <div class="settings-card-icon" aria-hidden="true">&#9881;</div>
+          <div>
+            <h3>基础运行规则</h3>
+            <p>这些设置会立即应用到用户端的号码展示、冷却限制和未收码号码的自动释放流程。</p>
+          </div>
+        </div>
+
+        <form method="POST" action="/admin/settings">
+          <div class="site-settings-grid">
+            <div class="form-group">
+              <label for="siteName">网站名称</label>
+              <input id="siteName" name="site_name" value="<%= siteName %>" maxlength="40" required>
+            </div>
+            <div class="form-group">
+              <label for="releaseTimeout">号码自动释放时间（分钟）</label>
+              <input id="releaseTimeout" name="release_timeout" value="<%= releaseTimeout %>" type="number" min="1" max="60" step="1" required>
+            </div>
+            <div class="form-group">
+              <label for="cooldownSeconds">获取新号码冷却时间（秒）</label>
+              <input id="cooldownSeconds" name="cooldown_seconds" value="<%= cooldownSeconds %>" type="number" min="10" max="3600" step="1" required>
+            </div>
+          </div>
+          <p class="settings-hint">自动释放只会处理尚未收到验证码的号码；已经收到验证码的卡密记录不会因为这个规则被提前清除。</p>
+          <div class="settings-actions"><button class="btn btn-primary" type="submit">保存网站设置</button></div>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

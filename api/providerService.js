@@ -86,67 +86,118 @@ async function getPhoneWithPrefix(provider, channel, options = {}) {
   const maxRequests = enabled
     ? Math.min(20, Math.max(1, parseInt(channel.prefix_max_requests, 10) || 20))
     : 1;
+  const requestedConcurrency = parseInt(channel.prefix_concurrency, 10);
+  const concurrency = enabled
+    ? Math.min(maxRequests, Math.min(10, Math.max(1, Number.isFinite(requestedConcurrency) ? requestedConcurrency : 1)))
+    : 1;
   const requestIntervalMs = Math.min(10000, Math.max(500, parseInt(channel.prefix_request_interval_ms, 10) || 500));
   const rejected = [];
 
-  for (let attempt = 1; attempt <= maxRequests; attempt++) {
-    let result;
-    try {
-      result = await getPhone(provider, channel, token, options);
-    } catch (error) {
-      result = { success: false, msg: error.message };
-    }
+  let nextAttempt = 1;
+  let requestCount = 0;
+  let acceptedResult = null;
 
-    if (result && result.success && result.data && result.data.mobile) {
-      const phone = String(result.data.mobile);
-      const matches = prefixList.some(prefix => phone.startsWith(prefix));
-      const accepted = !enabled || (filterMode === 'exclude' ? !matches : matches);
-      if (accepted) {
-        return { ...result, token, rejected, requestCount: attempt, maxRequests, requestIntervalMs };
+  async function reportProgress(attempt, matched) {
+    if (typeof options.onProgress !== 'function') return;
+    try {
+      await options.onProgress({
+        attempt,
+        requestCount,
+        maxRequests,
+        concurrency,
+        rejectedCount: rejected.length,
+        matched
+      });
+    } catch (error) {
+      console.error('Failed to report phone request progress:', error.message);
+    }
+  }
+
+  async function releaseExtraMatch(phone) {
+    try {
+      await blacklistPhone(provider, channel, token, phone);
+      await releasePhone(provider, channel, token, phone);
+    } catch (error) {
+      console.error('Failed to release extra matched phone:', error.message);
+    }
+  }
+
+  async function requestWorker() {
+    while (!acceptedResult && nextAttempt <= maxRequests) {
+      const attempt = nextAttempt++;
+      requestCount = Math.max(requestCount, attempt);
+      let result;
+      try {
+        result = await getPhone(provider, channel, token, options);
+      } catch (error) {
+        result = { success: false, msg: error.message };
       }
-      rejected.push(phone);
-      if (typeof options.onRejected === 'function') {
-        try {
-          await options.onRejected(phone, attempt, {
-            mode: filterMode,
-            prefixes: prefixList,
-            reason: filterMode === 'exclude'
-              ? '命中排除号段：' + prefixList.join(', ')
-              : '不符合指定号段：' + prefixList.join(', ')
-          });
-        } catch (error) {
-          console.error('Failed to register rejected phone:', error.message);
+
+      if (result && result.success && result.data && result.data.mobile) {
+        const phone = String(result.data.mobile);
+        const matches = prefixList.some(prefix => phone.startsWith(prefix));
+        const accepted = !enabled || (filterMode === 'exclude' ? !matches : matches);
+        if (accepted) {
+          if (!acceptedResult) {
+            acceptedResult = { ...result, attempt };
+            await reportProgress(attempt, true);
+          } else {
+            // Concurrent requests can finish together. Keep the first matching
+            // number and immediately release any other matching result.
+            await releaseExtraMatch(phone);
+          }
+          return;
+        }
+
+        rejected.push(phone);
+        if (typeof options.onRejected === 'function') {
+          try {
+            await options.onRejected(phone, attempt, {
+              mode: filterMode,
+              prefixes: prefixList,
+              reason: filterMode === 'exclude'
+                ? '命中排除号段：' + prefixList.join(', ')
+                : '不符合指定号段：' + prefixList.join(', ')
+            });
+          } catch (error) {
+            console.error('Failed to register rejected phone:', error.message);
+          }
         }
       }
-    }
 
-    if (typeof options.onProgress === 'function') {
-      try {
-        await options.onProgress({
-          attempt,
-          maxRequests,
-          rejectedCount: rejected.length,
-          matched: false
-        });
-      } catch (error) {
-        console.error('Failed to report phone request progress:', error.message);
+      await reportProgress(attempt, false);
+      if (!acceptedResult && nextAttempt <= maxRequests) {
+        await new Promise(resolve => setTimeout(resolve, requestIntervalMs));
       }
     }
+  }
 
-    if (attempt < maxRequests) await new Promise(resolve => setTimeout(resolve, requestIntervalMs));
+  await Promise.all(Array.from({ length: concurrency }, requestWorker));
+
+  if (acceptedResult) {
+    return {
+      ...acceptedResult,
+      token,
+      rejected,
+      requestCount,
+      maxRequests,
+      concurrency,
+      requestIntervalMs
+    };
   }
 
   return {
     success: false,
     msg: enabled
-      ? '已逐个请求 ' + maxRequests + ' 次，' + (filterMode === 'exclude'
+      ? '已请求 ' + requestCount + ' 次（同时 ' + concurrency + ' 个），' + (filterMode === 'exclude'
         ? '获取到的号码均命中排除号段(' + prefixList.join(', ') + ')，请稍后重试'
         : '暂未获取到指定号段(' + prefixList.join(', ') + ')的号码，请稍后重试')
       : '获取号码失败，请稍后重试',
     token,
     rejected,
-    requestCount: maxRequests,
+    requestCount,
     maxRequests,
+    concurrency,
     requestIntervalMs
   };
 }

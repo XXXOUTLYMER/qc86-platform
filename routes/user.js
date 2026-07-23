@@ -136,6 +136,7 @@ function getPrefixRequestOptions(card, channel) {
   return {
     enabled: channel.prefix_enabled,
     maxRequests: channel.prefix_max_requests,
+    concurrency: channel.prefix_concurrency,
     requestIntervalMs: channel.prefix_request_interval_ms,
     onRejected(phone, attempt, rejection) {
       registerRejectedPhone({

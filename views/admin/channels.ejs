@@ -41,9 +41,9 @@
       <div class="card-body">
         <div class="table-wrap">
           <table>
-            <thead><tr><th>ID</th><th>项目名称</th><th>API 服务商</th><th>接口项目参数</th><th>号段过滤</th><th>号段列表</th><th>最多请求</th><th>间隔</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th>ID</th><th>项目名称</th><th>API 服务商</th><th>接口项目参数</th><th>号段过滤</th><th>号段列表</th><th>最多尝试</th><th>同时请求</th><th>间隔</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
-              <% if (!channels.length) { %><tr><td colspan="10" class="empty">暂无项目，请添加</td></tr><% } %>
+              <% if (!channels.length) { %><tr><td colspan="11" class="empty">暂无项目，请添加</td></tr><% } %>
               <% channels.forEach(function(ch) { %>
               <tr>
                 <td data-label="ID"><%= ch.id %></td>
@@ -55,7 +55,8 @@
                 <% var filterMode = ch.prefix_filter_mode === 'exclude' ? 'exclude' : (Number(ch.prefix_enabled) === 0 ? 'disabled' : 'include'); %>
                 <td data-label="号段过滤"><span class="badge <%= filterMode === 'disabled' ? 'badge-inactive' : 'badge-active' %>"><%= filterMode === 'exclude' ? '排除' : (filterMode === 'include' ? '指定' : '关闭') %></span></td>
                 <td data-label="号段列表"><%= filterMode === 'disabled' ? '-' : (ch.prefix || '-') %></td>
-                <td data-label="最多请求"><%= Math.min(20, Math.max(1, parseInt(ch.prefix_max_requests, 10) || 20)) %> 次</td>
+                <td data-label="最多尝试"><%= Math.min(20, Math.max(1, parseInt(ch.prefix_max_requests, 10) || 20)) %> 次</td>
+                <td data-label="同时请求"><%= Math.min(Math.min(20, Math.max(1, parseInt(ch.prefix_max_requests, 10) || 20)), Math.min(10, Math.max(1, parseInt(ch.prefix_concurrency, 10) || 1))) %> 个</td>
                 <td data-label="间隔"><%= (Math.min(10000, Math.max(500, parseInt(ch.prefix_request_interval_ms, 10) || 500)) / 1000).toFixed(1).replace(/\.0$/, '') %> 秒</td>
                 <td data-label="状态"><span class="badge <%= ch.is_active ? 'badge-active' : 'badge-inactive' %>"><%= ch.is_active ? '启用' : '停用' %></span></td>
                 <td data-label="操作">
@@ -143,6 +144,7 @@
       document.getElementById('editPrefix').value = ch.prefix || '';
       document.getElementById('editPrefixFilterMode').value = ch.prefix_filter_mode === 'exclude' ? 'exclude' : (Number(ch.prefix_enabled) === 0 ? 'disabled' : 'include');
       document.getElementById('editPrefixMaxRequests').value = Math.min(20, Math.max(1, Number(ch.prefix_max_requests) || 20));
+      document.getElementById('editPrefixConcurrency').value = Math.min(Math.min(20, Math.max(1, Number(ch.prefix_max_requests) || 20)), Math.min(10, Math.max(1, Number(ch.prefix_concurrency) || 1)));
       document.getElementById('editPrefixRequestInterval').value = Math.min(10, Math.max(0.5, (Number(ch.prefix_request_interval_ms) || 500) / 1000));
       document.getElementById('editOperator').value = ch.operator || 0;
       document.getElementById('editDescription').value = ch.description || '';

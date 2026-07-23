@@ -153,7 +153,9 @@
       try {
         var response = await fetch('/admin/api-providers/test/' + id, { method: 'POST' });
         var data = await response.json();
-        alert(data.success ? '连接成功，余额：' + data.balance : '连接失败：' + data.error);
+        alert(data.success
+          ? (data.balance == null || data.balance === '' ? (data.message || '连接成功，但服务商未返回余额数值') : '连接成功，余额：' + data.balance)
+          : '连接失败：' + data.error);
       } catch (error) { alert('连接失败：' + error.message); }
       button.disabled = false;
       button.textContent = old;
@@ -249,7 +251,11 @@
           : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         var data = await response.json();
         if (!data.success) return showUoomsgResult(providerId, data.error || data.msg || '操作失败', 'error');
-        if (action === 'balance') return showUoomsgResult(providerId, '余额：' + data.balance, 'success');
+        if (action === 'balance') {
+          return showUoomsgResult(providerId,
+            data.balance == null || data.balance === '' ? (data.message || '连接成功，但服务商未返回余额数值') : '余额：' + data.balance,
+            'success');
+        }
         if (action === 'get-phone' && data.data && data.data.mobile) {
           phoneInput.value = data.data.mobile;
           return showUoomsgResult(providerId, '获取成功：' + data.data.mobile, 'success');

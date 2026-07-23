@@ -20,6 +20,18 @@ function requireBetaPublisher(req, res, next) {
   next();
 }
 
+function extractProviderBalance(result) {
+  const candidates = [
+    result && result.balance,
+    result && result.data && result.data.balances,
+    result && result.data && result.data.balance
+  ];
+  for (const value of candidates) {
+    if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+  }
+  return null;
+}
+
 function normalizePrefixEnabled(value) {
   if (Array.isArray(value)) return value.includes('1') ? 1 : 0;
   return value === true || value === '1' || value === 'on' ? 1 : 0;
@@ -438,8 +450,12 @@ router.post('/api-providers/test/:id', requireAdmin, async (req, res) => {
   if (!provider) return res.json({ success: false, error: '服务商不存在' });
   try {
     const result = await providerService.getBalance(provider);
-    const balance = result.balance || (result.data && result.data.balances);
-    res.json({ success: true, balance: balance == null ? '连接成功' : balance });
+    const balance = extractProviderBalance(result);
+    res.json({
+      success: true,
+      balance,
+      message: balance == null ? '连接成功，但服务商未返回余额数值' : ''
+    });
   } catch (error) {
     res.json({ success: false, error: error.message });
   }
@@ -700,8 +716,12 @@ router.get('/api/balance', requireAdmin, async (req, res) => {
   if (!provider) return res.json({ success: false, error: '没有可用的 API 服务商' });
   try {
     const result = await providerService.getBalance(provider);
-    const balance = result.balance || (result.data && result.data.balances);
-    res.json({ success: true, balance: balance == null ? '连接成功' : balance });
+    const balance = extractProviderBalance(result);
+    res.json({
+      success: true,
+      balance,
+      message: balance == null ? '连接成功，但服务商未返回余额数值' : ''
+    });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 

@@ -145,6 +145,7 @@ async function initDb() {
       channel_id TEXT NOT NULL,
       operator INTEGER DEFAULT 0,
       scope TEXT DEFAULT '',
+      direct_scope TEXT DEFAULT '',
       prefix TEXT DEFAULT '',
       prefix_enabled INTEGER DEFAULT 1,
       prefix_filter_mode TEXT DEFAULT 'include',
@@ -232,6 +233,7 @@ async function initDb() {
 
   // Migrations
   try { db.exec("ALTER TABLE channels ADD COLUMN scope TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE channels ADD COLUMN direct_scope TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE card_keys ADD COLUMN max_attempts INTEGER DEFAULT 3"); } catch(e) {}
   try { db.exec("ALTER TABLE card_keys ADD COLUMN attempts INTEGER DEFAULT 0"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_channel_id', '')"); } catch(e) {}

@@ -9,7 +9,16 @@
     .provider-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;background:#eef6ff;color:#1769aa;font-size:12px;font-weight:600}
     .provider-fields{padding:12px;background:#f7f8fa;border:1px solid #e8eaed;border-radius:6px;margin-bottom:14px}
     .field-hint{font-size:12px;color:#888;margin-top:5px;line-height:1.5}
-    .prefix-filter-disabled{display:none}
+    .is-hidden{display:none}
+    .prefix-filter-inactive{opacity:.62}
+    .direct-scope-notice{margin:0 0 14px;padding:9px 10px;border:1px solid #bfe7cd;border-radius:6px;background:#f1fbf4;color:#237345;font-size:12px;line-height:1.5}
+    .direct-scope-control{display:flex;gap:8px;align-items:center}
+    .direct-scope-control input{min-width:0;flex:1}
+    .direct-scope-control .btn{flex:0 0 auto;white-space:nowrap}
+    .direct-scope-save-status{min-height:18px}
+    .direct-scope-save-status.is-error{color:#b42318}
+    .direct-scope-save-status.is-success{color:#237345}
+    @media (max-width:520px){.direct-scope-control{align-items:stretch;flex-direction:column}.direct-scope-control .btn{width:100%}}
   </style>
 </head>
 <body>
@@ -41,9 +50,9 @@
       <div class="card-body">
         <div class="table-wrap">
           <table>
-            <thead><tr><th>ID</th><th>项目名称</th><th>API 服务商</th><th>接口项目参数</th><th>号段过滤</th><th>号段列表</th><th>最多尝试</th><th>同时请求</th><th>间隔</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th>ID</th><th>项目名称</th><th>API 服务商</th><th>接口项目参数</th><th>API 指定号段</th><th>本地号段过滤</th><th>备用号段列表</th><th>最多尝试</th><th>同时请求</th><th>间隔</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
-              <% if (!channels.length) { %><tr><td colspan="11" class="empty">暂无项目，请添加</td></tr><% } %>
+              <% if (!channels.length) { %><tr><td colspan="12" class="empty">暂无项目，请添加</td></tr><% } %>
               <% channels.forEach(function(ch) { %>
               <tr>
                 <td data-label="ID"><%= ch.id %></td>
@@ -52,9 +61,10 @@
                 <td data-label="接口项目参数" style="font-size:12px">
                   <% if (ch.provider_type === 'uoomsg') { %>关键词：<%= ch.api_keyword || '-' %><% } else { %><span style="font-family:monospace"><%= ch.channel_id || '-' %></span><% } %>
                 </td>
+                <td data-label="API 指定号段"><% if (ch.provider_type === 'qc86' && ch.direct_scope) { %><span class="badge badge-active">直接 <%= ch.direct_scope %></span><% } else { %>-<% } %></td>
                 <% var filterMode = ch.prefix_filter_mode === 'exclude' ? 'exclude' : (Number(ch.prefix_enabled) === 0 ? 'disabled' : 'include'); %>
-                <td data-label="号段过滤"><span class="badge <%= filterMode === 'disabled' ? 'badge-inactive' : 'badge-active' %>"><%= filterMode === 'exclude' ? '排除' : (filterMode === 'include' ? '指定' : '关闭') %></span></td>
-                <td data-label="号段列表"><%= filterMode === 'disabled' ? '-' : (ch.prefix || '-') %></td>
+                <td data-label="本地号段过滤"><span class="badge <%= filterMode === 'disabled' ? 'badge-inactive' : 'badge-active' %>"><%= filterMode === 'exclude' ? '排除' : (filterMode === 'include' ? '指定' : '关闭') %></span></td>
+                <td data-label="备用号段列表"><%= filterMode === 'disabled' ? '-' : (ch.prefix || '-') %></td>
                 <td data-label="最多尝试"><%= Math.min(20, Math.max(1, parseInt(ch.prefix_max_requests, 10) || 20)) %> 次</td>
                 <td data-label="同时请求"><%= Math.min(Math.min(20, Math.max(1, parseInt(ch.prefix_max_requests, 10) || 20)), Math.min(10, Math.max(1, parseInt(ch.prefix_concurrency, 10) || 1))) %> 个</td>
                 <td data-label="间隔"><%= (Math.min(10000, Math.max(500, parseInt(ch.prefix_request_interval_ms, 10) || 500)) / 1000).toFixed(1).replace(/\.0$/, '') %> 秒</td>
@@ -108,13 +118,16 @@
       var keyword = form.querySelector('[name="api_keyword"]');
       if (channelId) channelId.required = type === 'qc86';
       if (keyword) keyword.required = type === 'uoomsg';
+      form.querySelectorAll('.qc86-direct-scope-field').forEach(function(box) { box.style.display = type === 'qc86' ? 'block' : 'none'; });
+      var scope = form.querySelector('[id$="DirectScope"]');
+      syncDirectScopeFields(scope);
     }
     function syncPrefixFilterFields(select) {
       var form = select.closest('form');
       var mode = select.value || 'include';
       var isDisabled = mode === 'disabled';
       form.querySelectorAll('.prefix-filter-dependent').forEach(function(box) {
-        box.classList.toggle('prefix-filter-disabled', isDisabled);
+        box.classList.toggle('prefix-filter-inactive', isDisabled);
       });
       var label = form.querySelector('[id$="PrefixLabel"]');
       var hint = form.querySelector('[id$="PrefixHint"]');
@@ -123,11 +136,21 @@
         ? '命中任一填写号段的号码会被记录、延迟释放，并继续逐个申请。支持逗号、空格或中文逗号分隔。'
         : '仅保留以任一填写号段开头的号码。支持逗号、空格或中文逗号分隔。';
     }
+    function syncDirectScopeFields(input) {
+      if (!input) return;
+      var form = input.closest('form');
+      var provider = form.querySelector('.provider-select');
+      var type = provider && provider.options[provider.selectedIndex] ? provider.options[provider.selectedIndex].dataset.type : 'qc86';
+      var enabled = type === 'qc86' && input.value.trim() !== '';
+      var notice = form.querySelector('.direct-scope-notice');
+      if (notice) notice.classList.toggle('is-hidden', !enabled);
+    }
     function openAddModal() {
       var modal = document.getElementById('addModal');
       modal.classList.add('show');
       syncProviderFields(modal.querySelector('.provider-select'));
       syncPrefixFilterFields(document.getElementById('addPrefixFilterMode'));
+      syncDirectScopeFields(document.getElementById('addDirectScope'));
     }
     function openEditModal(button) {
       var ch = JSON.parse(decodeURIComponent(button.dataset.channel));
@@ -141,6 +164,7 @@
       document.getElementById('editApiProvince').value = ch.api_province || '';
       document.getElementById('editApiCardType').value = ch.api_card_type || '全部';
       document.getElementById('editScope').value = ch.scope || '';
+      document.getElementById('editDirectScope').value = ch.direct_scope || '';
       document.getElementById('editPrefix').value = ch.prefix || '';
       document.getElementById('editPrefixFilterMode').value = ch.prefix_filter_mode === 'exclude' ? 'exclude' : (Number(ch.prefix_enabled) === 0 ? 'disabled' : 'include');
       document.getElementById('editPrefixMaxRequests').value = Math.min(20, Math.max(1, Number(ch.prefix_max_requests) || 20));
@@ -149,9 +173,55 @@
       document.getElementById('editOperator').value = ch.operator || 0;
       document.getElementById('editDescription').value = ch.description || '';
       document.getElementById('editActive').value = ch.is_active ? '1' : '0';
+      document.getElementById('editDirectScopeSaveStatus').textContent = '';
+      document.getElementById('editDirectScopeSaveStatus').className = 'field-hint direct-scope-save-status';
       syncProviderFields(document.getElementById('editProviderId'));
       syncPrefixFilterFields(document.getElementById('editPrefixFilterMode'));
+      syncDirectScopeFields(document.getElementById('editDirectScope'));
       document.getElementById('editModal').classList.add('show');
+    }
+    function saveDirectScopeOnly() {
+      var form = document.getElementById('editForm');
+      var scopeInput = document.getElementById('editDirectScope');
+      var saveButton = document.getElementById('editDirectScopeSave');
+      var status = document.getElementById('editDirectScopeSaveStatus');
+      var match = (form.action || '').match(/\/admin\/channels\/edit\/([^/?#]+)/);
+      if (!match) return;
+      var provider = document.getElementById('editProviderId');
+      var selected = provider.options[provider.selectedIndex];
+      if (!selected || selected.dataset.type !== 'qc86') {
+        status.textContent = '请先选择 QC86 服务商';
+        status.className = 'field-hint direct-scope-save-status is-error';
+        return;
+      }
+      var value = (scopeInput.value || '').trim();
+      if (value && !/^\d{1,11}$/.test(value)) {
+        status.textContent = '请填写 1 至 11 位数字，例如 170';
+        status.className = 'field-hint direct-scope-save-status is-error';
+        return;
+      }
+      saveButton.disabled = true;
+      status.textContent = '正在确认保存…';
+      status.className = 'field-hint direct-scope-save-status';
+      var request = new XMLHttpRequest();
+      request.open('POST', '/admin/channels/' + encodeURIComponent(match[1]) + '/direct-scope', true);
+      request.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+      request.setRequestHeader('Accept', 'application/json');
+      request.onreadystatechange = function() {
+        if (request.readyState !== 4) return;
+        saveButton.disabled = false;
+        var payload = {};
+        try { payload = JSON.parse(request.responseText || '{}'); } catch (error) {}
+        if (request.status >= 200 && request.status < 300 && payload.success) {
+          status.textContent = payload.message + '，正在刷新列表…';
+          status.className = 'field-hint direct-scope-save-status is-success';
+          window.setTimeout(function() { window.location.reload(); }, 550);
+          return;
+        }
+        status.textContent = payload.error || '保存失败，请刷新页面后重试';
+        status.className = 'field-hint direct-scope-save-status is-error';
+      };
+      request.send('direct_scope=' + encodeURIComponent(value));
     }
     function closeModal(id) { document.getElementById(id).classList.remove('show'); }
     function importFromJson() {

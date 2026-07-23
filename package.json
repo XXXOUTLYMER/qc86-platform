@@ -7,7 +7,9 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test:api": "node tests/uoomsg.mock.test.js && node tests/qc86.mock.test.js && node tests/providerBalance.test.js",
-    "test:card-keys": "node tests/cardKeyCodes.test.js"
+    "test:card-keys": "node tests/cardKeyCodes.test.js",
+    "test:channel-settings": "node tests/channelEditPreservation.test.js",
+    "test:initial-admin": "node tests/initialAdminConfig.test.js"
   },
   "dependencies": {
     "express": "^4.18.2",

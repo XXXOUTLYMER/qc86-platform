@@ -1,7 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database');
 const providerService = require('../api/providerService');
-const { registerRejectedPhone } = require('./rejectedPhones');
+const { registerRejectedPhone, releaseRejectedPhone } = require('./rejectedPhones');
 const phoneRequests = require('../services/phoneRequests');
 
 // Helper: get configurable cooldown seconds from settings
@@ -138,14 +138,24 @@ function getPrefixRequestOptions(card, channel) {
     maxRequests: channel.prefix_max_requests,
     concurrency: channel.prefix_concurrency,
     requestIntervalMs: channel.prefix_request_interval_ms,
-    onRejected(phone, attempt, rejection) {
-      registerRejectedPhone({
+    async onRejected(phone, attempt, rejection) {
+      const immediateRelease = Boolean(rejection && rejection.immediateRelease);
+      const recordId = registerRejectedPhone({
         cardId: card.id,
         channelId: channel.id,
         phone,
         channelName: channel.name,
-        reason: rejection && rejection.reason
+        reason: rejection && rejection.reason,
+        releaseDelayMs: immediateRelease ? null : undefined
       });
+      if (!immediateRelease) return null;
+      try {
+        await releaseRejectedPhone(recordId);
+        return { releaseHandled: true };
+      } catch (error) {
+        console.error('Failed to immediately release direct-scope mismatch:', error.message);
+        return null;
+      }
     }
   };
 }

@@ -56,6 +56,19 @@ function normalizeDirectScope(value) {
   return scope;
 }
 
+function submittedOrExisting(body, key, existingValue) {
+  return Object.prototype.hasOwnProperty.call(body || {}, key) ? body[key] : existingValue;
+}
+
+function verifySavedDirectScope(db, channelId, expectedScope) {
+  const savedChannel = db.prepare('SELECT id, direct_scope FROM channels WHERE id=?').get([channelId]);
+  if (!savedChannel) throw new Error('项目保存后不存在，可能已被删除');
+  if (String(savedChannel.direct_scope || '') !== String(expectedScope || '')) {
+    throw new Error('API 指定号段没有写入数据库，请刷新页面后重试');
+  }
+  return savedChannel;
+}
+
 function normalizeCooldownSeconds(value) {
   const parsed = parseInt(value, 10);
   return Math.min(3600, Math.max(10, Number.isFinite(parsed) ? parsed : 60));
@@ -510,30 +523,56 @@ router.post('/channels/add', requireAdmin, (req, res) => {
 
 router.post('/channels/edit/:id', requireAdmin, (req, res) => {
   const db = getDb();
-  const { name, channel_id, operator, scope, prefix, description, is_active, api_keyword, api_phone, api_province, api_card_type } = req.body;
-  const provider = db.prepare('SELECT * FROM api_providers WHERE id=?').get([req.body.provider_id]);
+  const currentChannel = db.prepare('SELECT * FROM channels WHERE id=?').get([req.params.id]);
+  if (!currentChannel) return renderChannels(res, req, db, '项目不存在，可能已被删除');
+
+  // Mobile browsers or a provider-specific UI can omit a hidden field. Keep the
+  // existing value in that case, while still allowing an intentionally blank
+  // submitted value to clear the setting.
+  const providerId = submittedOrExisting(req.body, 'provider_id', currentChannel.provider_id);
+  const name = submittedOrExisting(req.body, 'name', currentChannel.name);
+  const channelId = submittedOrExisting(req.body, 'channel_id', currentChannel.channel_id);
+  const operator = submittedOrExisting(req.body, 'operator', currentChannel.operator);
+  const scope = submittedOrExisting(req.body, 'scope', currentChannel.scope);
+  const prefix = submittedOrExisting(req.body, 'prefix', currentChannel.prefix);
+  const description = submittedOrExisting(req.body, 'description', currentChannel.description);
+  const isActive = submittedOrExisting(req.body, 'is_active', currentChannel.is_active);
+  const apiKeyword = submittedOrExisting(req.body, 'api_keyword', currentChannel.api_keyword);
+  const apiPhone = submittedOrExisting(req.body, 'api_phone', currentChannel.api_phone);
+  const apiProvince = submittedOrExisting(req.body, 'api_province', currentChannel.api_province);
+  const apiCardType = submittedOrExisting(req.body, 'api_card_type', currentChannel.api_card_type);
+  const provider = db.prepare('SELECT * FROM api_providers WHERE id=?').get([providerId]);
   if (!provider) return renderChannels(res, req, db, '请选择有效的 API 服务商');
-  if (provider.provider_type === 'qc86' && !String(channel_id || '').trim()) return renderChannels(res, req, db, 'qc86 项目必须填写 channelId');
-  if (provider.provider_type === 'uoomsg' && !String(api_keyword || '').trim()) return renderChannels(res, req, db, 'uoomsg 项目必须填写短信关键词');
-  const prefixFilterMode = normalizePrefixFilterMode(req.body.prefix_filter_mode, req.body.prefix_enabled);
+  if (provider.provider_type === 'qc86' && !String(channelId || '').trim()) return renderChannels(res, req, db, 'qc86 项目必须填写 channelId');
+  if (provider.provider_type === 'uoomsg' && !String(apiKeyword || '').trim()) return renderChannels(res, req, db, 'uoomsg 项目必须填写短信关键词');
+  const prefixFilterMode = normalizePrefixFilterMode(
+    submittedOrExisting(req.body, 'prefix_filter_mode', currentChannel.prefix_filter_mode),
+    submittedOrExisting(req.body, 'prefix_enabled', currentChannel.prefix_enabled)
+  );
   const prefixEnabled = prefixFilterMode === 'disabled' ? 0 : 1;
-  const prefixMaxRequests = normalizePrefixMaxRequests(req.body.prefix_max_requests);
-  const prefixConcurrency = Math.min(prefixMaxRequests, normalizePrefixConcurrency(req.body.prefix_concurrency));
-  const prefixRequestIntervalMs = normalizePrefixRequestIntervalMs(req.body.prefix_request_interval_seconds);
+  const prefixMaxRequests = normalizePrefixMaxRequests(submittedOrExisting(req.body, 'prefix_max_requests', currentChannel.prefix_max_requests));
+  const prefixConcurrency = Math.min(prefixMaxRequests, normalizePrefixConcurrency(submittedOrExisting(req.body, 'prefix_concurrency', currentChannel.prefix_concurrency)));
+  const prefixRequestIntervalMs = normalizePrefixRequestIntervalMs(submittedOrExisting(
+    req.body,
+    'prefix_request_interval_seconds',
+    (Number(currentChannel.prefix_request_interval_ms) || 500) / 1000
+  ));
   try {
-    const directScope = provider.provider_type === 'qc86' ? normalizeDirectScope(req.body.direct_scope) : '';
-    db.prepare(`
+    const directScope = provider.provider_type === 'qc86'
+      ? normalizeDirectScope(submittedOrExisting(req.body, 'direct_scope', currentChannel.direct_scope))
+      : '';
+    const result = db.prepare(`
       UPDATE channels
       SET name=?, channel_id=?, provider_id=?, api_keyword=?, api_phone=?, api_province=?, api_card_type=?, operator=?, scope=?, direct_scope=?, prefix=?, prefix_enabled=?, prefix_filter_mode=?, prefix_max_requests=?, prefix_concurrency=?, prefix_request_interval_ms=?, description=?, is_active=?
       WHERE id=?
     `).run([
-      name,
-      String(channel_id || '').trim(),
+      String(name || '').trim(),
+      String(channelId || '').trim(),
       provider.id,
-      String(api_keyword || '').trim(),
-      String(api_phone || '').trim(),
-      String(api_province || '').trim(),
-      ['实卡', '虚卡', '全部'].includes(api_card_type) ? api_card_type : '全部',
+      String(apiKeyword || '').trim(),
+      String(apiPhone || '').trim(),
+      String(apiProvince || '').trim(),
+      ['实卡', '虚卡', '全部'].includes(apiCardType) ? apiCardType : '全部',
       parseInt(operator || 0),
       scope || '',
       directScope,
@@ -544,13 +583,49 @@ router.post('/channels/edit/:id', requireAdmin, (req, res) => {
       prefixConcurrency,
       prefixRequestIntervalMs,
       description || '',
-      parseInt(is_active || 0),
+      parseInt(isActive || 0),
       req.params.id
     ]);
+    if (!result || result.changes !== 1) throw new Error('项目没有保存成功，请刷新页面后重试');
     saveDb();
-    res.redirect('/admin/channels?success=更新成功');
+    verifySavedDirectScope(db, req.params.id, directScope);
+    const directScopeMessage = directScope ? '，API 指定号段：' + directScope : '，API 指定号段已关闭';
+    res.redirect('/admin/channels?success=' + encodeURIComponent('更新成功' + directScopeMessage));
   } catch (e) {
     renderChannels(res, req, db, '更新失败: ' + e.message);
+  }
+});
+
+// This endpoint intentionally updates only the upstream QC86 scope. It avoids
+// accidental loss of unrelated project fields when an admin only changes the
+// API-provided prefix setting.
+router.post('/channels/:id/direct-scope', requireAdmin, (req, res) => {
+  const db = getDb();
+  try {
+    const channel = db.prepare(`
+      SELECT channels.id, channels.provider_id, api_providers.provider_type
+      FROM channels
+      LEFT JOIN api_providers ON api_providers.id = channels.provider_id
+      WHERE channels.id=?
+    `).get([req.params.id]);
+    if (!channel) return res.status(404).json({ success: false, error: '项目不存在，可能已被删除' });
+    if (channel.provider_type !== 'qc86') {
+      return res.status(400).json({ success: false, error: '只有 QC86 项目可以设置 API 指定号段' });
+    }
+
+    const directScope = normalizeDirectScope(req.body.direct_scope);
+    const result = db.prepare('UPDATE channels SET direct_scope=? WHERE id=?').run([directScope, channel.id]);
+    if (!result || result.changes !== 1) throw new Error('API 指定号段没有保存成功');
+    saveDb();
+    verifySavedDirectScope(db, channel.id, directScope);
+
+    res.json({
+      success: true,
+      direct_scope: directScope,
+      message: directScope ? 'API 指定号段已保存：' + directScope : 'API 指定号段已关闭'
+    });
+  } catch (e) {
+    res.status(400).json({ success: false, error: e.message || '保存 API 指定号段失败' });
   }
 });
 
@@ -736,19 +811,34 @@ router.post('/api/get-phone', requireAdmin, async (req, res) => {
   const requestChannel = {
     ...channel,
     operator: req.body.operator == null ? channel.operator : parseInt(req.body.operator || 0),
-    scope: req.body.scope == null ? channel.scope : req.body.scope
+    scope: req.body.scope == null ? channel.scope : req.body.scope,
+    direct_scope: req.body.direct_scope == null
+      ? channel.direct_scope
+      : normalizeDirectScope(req.body.direct_scope)
   };
   try {
     const token = await providerService.getToken(provider);
     const result = await providerService.getPhoneWithPrefix(provider, requestChannel, {
       token,
       phone: req.body.phone_num || '',
-      onRejected: (phone, attempt, rejection) => registerRejectedPhone({
-        channelId: channel.id,
-        phone,
-        channelName: channel.name,
-        reason: rejection && rejection.reason
-      })
+      onRejected: async (phone, attempt, rejection) => {
+        const immediateRelease = Boolean(rejection && rejection.immediateRelease);
+        const recordId = registerRejectedPhone({
+          channelId: channel.id,
+          phone,
+          channelName: channel.name,
+          reason: rejection && rejection.reason,
+          releaseDelayMs: immediateRelease ? null : undefined
+        });
+        if (!immediateRelease) return null;
+        try {
+          await releaseRejectedPhone(recordId);
+          return { releaseHandled: true };
+        } catch (error) {
+          console.error('Failed to immediately release API debug mismatch:', error.message);
+          return null;
+        }
+      }
     });
     res.json(result);
   } catch (e) { res.json({ success: false, error: e.message }); }

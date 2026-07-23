@@ -1,6 +1,6 @@
 const { getDb, saveDb } = require('../database');
 const providerService = require('../api/providerService');
-const { registerRejectedPhone } = require('../routes/rejectedPhones');
+const { registerRejectedPhone, releaseRejectedPhone } = require('../routes/rejectedPhones');
 
 const activeJobs = new Set();
 let pendingJobSaveTimer = null;
@@ -54,21 +54,34 @@ function getPrefixOptions(card, channel) {
     maxRequests: channel.prefix_max_requests,
     concurrency: channel.prefix_concurrency,
     requestIntervalMs: channel.prefix_request_interval_ms,
-    onRejected(phone, attempt, rejection) {
-      registerRejectedPhone({
+    async onRejected(phone, attempt, rejection) {
+      const immediateRelease = Boolean(rejection && rejection.immediateRelease);
+      const recordId = registerRejectedPhone({
         cardId: card.id,
         channelId: channel.id,
         phone,
         channelName: channel.name,
         reason: rejection && rejection.reason,
-        deferSave: true
+        deferSave: !immediateRelease,
+        releaseDelayMs: immediateRelease ? null : undefined
       });
+      if (!immediateRelease) return null;
+      try {
+        await releaseRejectedPhone(recordId);
+        return { releaseHandled: true };
+      } catch (error) {
+        console.error('Failed to immediately release direct-scope mismatch:', error.message);
+        return null;
+      }
     },
     onProgress(progress) {
       const job = getPhoneRequestJob(card.id) || {};
       const totalRequests = Math.min(20, Math.max(1, parseInt(progress.maxRequests, 10) || 1));
-      const concurrency = Math.min(totalRequests, Math.min(10, Math.max(1, parseInt(channel.prefix_concurrency, 10) || 1)));
-      updateJob(card.id, 'running', concurrency > 1 ? '正在并发筛选指定号段的号码' : '正在逐个筛选指定号段的号码', {
+      const concurrency = Math.min(totalRequests, Math.min(10, Math.max(1, parseInt(progress.concurrency, 10) || 1)));
+      const message = progress.usedDirectScope
+        ? '正在向号码服务申请指定号段'
+        : (concurrency > 1 ? '正在并发筛选指定号段的号码' : '正在逐个筛选指定号段的号码');
+      updateJob(card.id, 'running', message, {
         requestCount: progress.attempt,
         maxRequests: progress.maxRequests,
         attemptCounted: job.attempt_counted
@@ -174,9 +187,13 @@ function runPhoneRequest(cardId) {
         return;
       }
 
-      const maxRequests = Number(channel.prefix_enabled) !== 0 && String(channel.prefix || '').trim()
-        ? Math.min(20, Math.max(1, parseInt(channel.prefix_max_requests, 10) || 20))
-        : 1;
+      const provider = providerService.getProviderForChannel(channel);
+      const directScope = providerService.getDirectScope(provider, channel);
+      const maxRequests = directScope
+        ? 1
+        : (Number(channel.prefix_enabled) !== 0 && String(channel.prefix || '').trim()
+          ? Math.min(20, Math.max(1, parseInt(channel.prefix_max_requests, 10) || 20))
+          : 1);
       const existingJob = getPhoneRequestJob(numericCardId) || {};
       updateJob(numericCardId, 'running', '正在连接号码服务', {
         requestCount: existingJob.request_count || 0,
@@ -184,7 +201,6 @@ function runPhoneRequest(cardId) {
         attemptCounted: existingJob.attempt_counted || 0
       });
 
-      const provider = providerService.getProviderForChannel(channel);
       const token = await providerService.getToken(provider);
 
       await releasePreviousPhone(provider, channel, token, card);
@@ -192,9 +208,10 @@ function runPhoneRequest(cardId) {
         db.prepare("UPDATE card_keys SET phone_number='', token='', sms_task_id='' WHERE id=? AND (sms_code IS NULL OR sms_code = '')").run([numericCardId]);
       }
 
-      // Filtering can request and release several non-matching numbers. A card
-      // is charged only after a matching number is actually assigned to it.
-      updateJob(numericCardId, 'running', '正在逐个筛选指定号段的号码', {
+      // QC86 can apply a scope upstream. Local fallback filtering can request
+      // and release several non-matching numbers, but never charges a card
+      // until a matching number is actually assigned to it.
+      updateJob(numericCardId, 'running', directScope ? '正在向号码服务申请指定号段' : '正在逐个筛选指定号段的号码', {
         requestCount: 0,
         maxRequests,
         attemptCounted: 0

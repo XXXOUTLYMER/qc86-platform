@@ -1,8 +1,18 @@
-<div class="form-group"><label>地区范围（qc86 scope，可选）</label><input name="scope" id="<%= prefix %>Scope" placeholder="留空为全部地区"></div>
-<div class="form-group"><label>号段过滤模式</label><select name="prefix_filter_mode" id="<%= prefix %>PrefixFilterMode" onchange="syncPrefixFilterFields(this)"><option value="disabled">关闭过滤</option><option value="include" selected>指定号段</option><option value="exclude">排除号段</option></select><div class="field-hint">指定与排除只能二选一，不会同时生效。</div></div>
-<div class="form-group prefix-filter-dependent"><label id="<%= prefix %>PrefixLabel">指定号段</label><input name="prefix" id="<%= prefix %>Prefix" placeholder="例如：170, 171, 162"><div class="field-hint" id="<%= prefix %>PrefixHint">仅保留以任一填写号段开头的号码。支持逗号、空格或中文逗号分隔。</div></div>
-<div class="form-group prefix-filter-dependent"><label>最多尝试次数</label><input type="number" name="prefix_max_requests" id="<%= prefix %>PrefixMaxRequests" min="1" max="20" value="20"><div class="field-hint">一次筛选最多请求 20 个号码；只有筛到符合号段的号码才会计入卡密次数。</div></div>
-<div class="form-group prefix-filter-dependent"><label>同时请求数量</label><input type="number" name="prefix_concurrency" id="<%= prefix %>PrefixConcurrency" min="1" max="10" value="1"><div class="field-hint">默认 1 个。可设置 2 至 10 个并行请求；并行时多出的符合号码会自动释放。</div></div>
-<div class="form-group prefix-filter-dependent"><label>每轮请求间隔（秒）</label><input type="number" name="prefix_request_interval_seconds" id="<%= prefix %>PrefixRequestInterval" min="0.5" max="10" step="0.5" value="0.5"><div class="field-hint">每个并发通道完成一轮后，等待该时间再发起下一次请求。</div></div>
+<div class="form-group qc86-direct-scope-field">
+  <label>API 直接指定号段（QC86 scope）</label>
+  <div class="direct-scope-control">
+    <input name="direct_scope" id="<%= prefix %>DirectScope" inputmode="numeric" maxlength="11" placeholder="例如：170" oninput="syncDirectScopeFields(this)">
+    <% if (prefix === 'edit') { %><button type="button" class="btn btn-success btn-sm" id="editDirectScopeSave" onclick="saveDirectScopeOnly()">单独保存</button><% } %>
+  </div>
+  <% if (prefix === 'edit') { %><div class="field-hint direct-scope-save-status" id="editDirectScopeSaveStatus" aria-live="polite"></div><% } %>
+  <div class="field-hint">填写后由 QC86 接口直接指定号码号段。单独保存只会改这一项，不会覆盖项目的其它 API 配置；上游仍返回错误号码时，系统会拦截并立即释放。</div>
+</div>
+<div class="form-group"><label>地区范围（旧 QC86 scope，可选）</label><input name="scope" id="<%= prefix %>Scope" placeholder="保留旧项目配置，留空为全部地区"><div class="field-hint">此项保留给原有配置。需要指定号码号段时，请使用上方“API 直接指定号段”。</div></div>
+<div class="direct-scope-notice is-hidden">已启用 QC86 API 直接指定号段：下方备用本地筛选设置会保留，不会被清空；当前获取会优先使用 API 直接指定号段。</div>
+<div class="form-group prefix-filter-dependent"><label>备用本地号段筛选模式</label><select name="prefix_filter_mode" id="<%= prefix %>PrefixFilterMode" onchange="syncPrefixFilterFields(this)"><option value="disabled">关闭本地筛选</option><option value="include" selected>指定本地号段</option><option value="exclude">排除本地号段</option></select><div class="field-hint">用于其他 API，或 QC86 未填写 API 直接指定号段时的备用规则。</div></div>
+<div class="form-group prefix-filter-dependent"><label id="<%= prefix %>PrefixLabel">备用指定号段</label><input name="prefix" id="<%= prefix %>Prefix" placeholder="例如：170, 171, 162"><div class="field-hint" id="<%= prefix %>PrefixHint">仅保留以任一填写号段开头的号码。支持逗号、空格或中文逗号分隔。</div></div>
+<div class="form-group prefix-filter-dependent"><label>备用本地最多尝试次数</label><input type="number" name="prefix_max_requests" id="<%= prefix %>PrefixMaxRequests" min="1" max="20" value="20"><div class="field-hint">本地筛选最多请求 20 个号码；只有筛到符合号段的号码才会计入卡密次数。</div></div>
+<div class="form-group prefix-filter-dependent"><label>备用本地同时请求数量</label><input type="number" name="prefix_concurrency" id="<%= prefix %>PrefixConcurrency" min="1" max="10" value="1"><div class="field-hint">默认 1 个。可设置 2 至 10 个并行请求；并行时多出的符合号码会自动释放。</div></div>
+<div class="form-group prefix-filter-dependent"><label>备用本地每轮请求间隔（秒）</label><input type="number" name="prefix_request_interval_seconds" id="<%= prefix %>PrefixRequestInterval" min="0.5" max="10" step="0.5" value="0.5"><div class="field-hint">每个并发通道完成一轮后，等待该时间再发起下一次请求。</div></div>
 <div class="form-group"><label>运营商（qc86）</label><select name="operator" id="<%= prefix %>Operator"><option value="0">全部</option><option value="5">虚拟运营商</option><option value="4">非虚拟运营商</option></select></div>
 <div class="form-group"><label>描述</label><input name="description" id="<%= prefix %>Description" placeholder="可选"></div>

@@ -59,7 +59,7 @@ function scheduleRejectedPhoneRelease(recordId, delayMs = RELEASE_DELAY_MS, retr
   releaseTimers.set(id, timer);
 }
 
-function registerRejectedPhone({ cardId = null, channelId, phone, channelName = '', reason = '号段不匹配', deferSave = false }) {
+function registerRejectedPhone({ cardId = null, channelId, phone, channelName = '', reason = '号段不匹配', deferSave = false, releaseDelayMs = RELEASE_DELAY_MS }) {
   const db = getDb();
   db.prepare(`
     INSERT INTO rejected_phones (card_key_id, channel_id, phone_number, channel_name, reason)
@@ -73,7 +73,9 @@ function registerRejectedPhone({ cardId = null, channelId, phone, channelName = 
   // batch those writes and persist once the task completes, keeping the user
   // page responsive while preserving the delayed release timer immediately.
   if (!deferSave) saveDb();
-  scheduleRejectedPhoneRelease(inserted.id);
+  if (releaseDelayMs !== null && releaseDelayMs !== false) {
+    scheduleRejectedPhoneRelease(inserted.id, releaseDelayMs);
+  }
   return inserted.id;
 }
 

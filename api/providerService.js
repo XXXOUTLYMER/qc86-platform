@@ -21,6 +21,12 @@ function providerType(provider) {
   return String(provider.provider_type || '').toLowerCase();
 }
 
+function getDirectScope(provider, channel) {
+  if (providerType(provider) !== 'qc86') return '';
+  const scope = String((channel || {}).direct_scope || '').trim();
+  return /^\d{1,11}$/.test(scope) ? scope : '';
+}
+
 async function getToken(provider) {
   if (providerType(provider) === 'uoomsg') {
     if (!provider.token) throw new Error('未配置 uoomsg API Token');
@@ -48,7 +54,7 @@ async function getPhone(provider, channel, token, options = {}) {
     requestToken,
     channel.channel_id,
     channel.operator,
-    channel.scope || null,
+    getDirectScope(provider, channel) || channel.scope || null,
     provider
   );
   const firstResult = await requestPhone(token);
@@ -92,10 +98,14 @@ async function queryUsed(provider, token) {
 
 async function getPhoneWithPrefix(provider, channel, options = {}) {
   let token = options.token || await getToken(provider);
+  const directScope = getDirectScope(provider, channel);
   const prefixList = channel.prefix
     ? String(channel.prefix).split(/[,，\s]+/).map(value => value.trim()).filter(Boolean)
     : [];
-  const enabled = Number(channel.prefix_enabled) !== 0 && prefixList.length > 0;
+  // A QC86 direct scope is applied by the upstream API. Keep the local filter
+  // as a fallback for other providers, but never hand an unexpected QC86
+  // number to a card even when the upstream API ignores the requested scope.
+  const enabled = !directScope && Number(channel.prefix_enabled) !== 0 && prefixList.length > 0;
   const filterMode = channel.prefix_filter_mode === 'exclude' ? 'exclude' : 'include';
   const maxRequests = enabled
     ? Math.min(20, Math.max(1, parseInt(channel.prefix_max_requests, 10) || 20))
@@ -119,6 +129,8 @@ async function getPhoneWithPrefix(provider, channel, options = {}) {
         requestCount,
         maxRequests,
         concurrency,
+        directScope,
+        usedDirectScope: Boolean(directScope),
         rejectedCount: rejected.length,
         matched
       });
@@ -136,6 +148,34 @@ async function getPhoneWithPrefix(provider, channel, options = {}) {
     }
   }
 
+  async function notifyRejected(phone, attempt, rejection) {
+    if (typeof options.onRejected !== 'function') return null;
+    try {
+      return await options.onRejected(phone, attempt, rejection);
+    } catch (error) {
+      console.error('Failed to register rejected phone:', error.message);
+      return null;
+    }
+  }
+
+  async function releaseDirectScopeMismatch(phone) {
+    try {
+      await blacklistPhone(provider, channel, token, phone);
+    } catch (error) {
+      console.error('Failed to blacklist direct-scope mismatch:', error.message);
+    }
+    try {
+      const releaseResult = await releasePhone(provider, channel, token, phone);
+      if (releaseResult && releaseResult.success === false) {
+        throw new Error(releaseResult.msg || '服务商未确认释放');
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to release direct-scope mismatch:', error.message);
+      return false;
+    }
+  }
+
   async function requestWorker() {
     while (!acceptedResult && nextAttempt <= maxRequests) {
       const attempt = nextAttempt++;
@@ -150,8 +190,9 @@ async function getPhoneWithPrefix(provider, channel, options = {}) {
 
       if (result && result.success && result.data && result.data.mobile) {
         const phone = String(result.data.mobile);
+        const directScopeMatched = !directScope || phone.startsWith(directScope);
         const matches = prefixList.some(prefix => phone.startsWith(prefix));
-        const accepted = !enabled || (filterMode === 'exclude' ? !matches : matches);
+        const accepted = directScopeMatched && (!enabled || (filterMode === 'exclude' ? !matches : matches));
         if (accepted) {
           if (!acceptedResult) {
             acceptedResult = { ...result, attempt };
@@ -165,18 +206,26 @@ async function getPhoneWithPrefix(provider, channel, options = {}) {
         }
 
         rejected.push(phone);
-        if (typeof options.onRejected === 'function') {
-          try {
-            await options.onRejected(phone, attempt, {
-              mode: filterMode,
-              prefixes: prefixList,
-              reason: filterMode === 'exclude'
-                ? '命中排除号段：' + prefixList.join(', ')
-                : '不符合指定号段：' + prefixList.join(', ')
-            });
-          } catch (error) {
-            console.error('Failed to register rejected phone:', error.message);
+        if (!directScopeMatched) {
+          const rejection = {
+            mode: 'direct_scope',
+            prefixes: [directScope],
+            directScope,
+            immediateRelease: true,
+            reason: 'QC86 未按 API 指定号段返回号码：要求 ' + directScope + '，实际 ' + phone
+          };
+          const handled = await notifyRejected(phone, attempt, rejection);
+          if (!handled || !handled.releaseHandled) {
+            await releaseDirectScopeMismatch(phone);
           }
+        } else {
+          await notifyRejected(phone, attempt, {
+            mode: filterMode,
+            prefixes: prefixList,
+            reason: filterMode === 'exclude'
+              ? '命中排除号段：' + prefixList.join(', ')
+              : '不符合指定号段：' + prefixList.join(', ')
+          });
         }
       }
 
@@ -197,13 +246,17 @@ async function getPhoneWithPrefix(provider, channel, options = {}) {
       requestCount,
       maxRequests,
       concurrency,
-      requestIntervalMs
+      requestIntervalMs,
+      directScope,
+      usedDirectScope: Boolean(directScope)
     };
   }
 
   return {
     success: false,
-    msg: enabled
+    msg: directScope && rejected.length
+      ? 'QC86 未按指定号段 ' + directScope + ' 返回号码，错误号码已拦截并释放；请检查项目的 API 直接指定号段设置后重试'
+      : enabled
       ? '已请求 ' + requestCount + ' 次（同时 ' + concurrency + ' 个），' + (filterMode === 'exclude'
         ? '获取到的号码均命中排除号段(' + prefixList.join(', ') + ')，请稍后重试'
         : '暂未获取到指定号段(' + prefixList.join(', ') + ')的号码，请稍后重试')
@@ -213,7 +266,9 @@ async function getPhoneWithPrefix(provider, channel, options = {}) {
     requestCount,
     maxRequests,
     concurrency,
-    requestIntervalMs
+    requestIntervalMs,
+    directScope,
+    usedDirectScope: Boolean(directScope)
   };
 }
 
@@ -227,5 +282,6 @@ module.exports = {
   releasePhone,
   sendSms,
   queryUsed,
+  getDirectScope,
   getPhoneWithPrefix
 };

@@ -87,7 +87,7 @@
             <h3 style="margin:22px 0 4px"><%= p.name %> API 调试工具</h3>
             <p style="font-size:13px;color:#888;margin:4px 0 14px">下面的操作只会调用 <%= p.name %> 已绑定的项目。</p>
             <div class="debug-grid">
-              <div class="form-group"><label>项目</label><select id="apiChannelId-<%= p.id %>"><option value="">-- 选择项目 --</option><% providerChannels.forEach(function(ch) { %><option value="<%= ch.id %>" data-channel-id="<%= ch.channel_id || '' %>" data-operator="<%= ch.operator || 0 %>" data-scope="<%= ch.scope || '' %>"><%= ch.name %></option><% }); %></select></div>
+              <div class="form-group"><label>项目</label><select id="apiChannelId-<%= p.id %>" onchange="updateApiDirectScope(this, <%= p.id %>)"><option value="">-- 选择项目 --</option><% providerChannels.forEach(function(ch) { const directScope = ch.direct_scope || ''; %><option value="<%= ch.id %>" data-channel-id="<%= ch.channel_id || '' %>" data-operator="<%= ch.operator || 0 %>" data-scope="<%= ch.scope || '' %>" data-direct-scope="<%= directScope %>"><%= ch.name %><%= directScope ? '（API 指定号段：' + directScope + '）' : '' %></option><% }); %></select><div id="apiDirectScope-<%= p.id %>" class="field-hint">API 指定号段：未设置</div></div>
               <div class="form-group"><label>运营商</label><select id="apiOperator-<%= p.id %>"><option value="0">不限</option><option value="1">移动</option><option value="2">联通</option><option value="3">电信</option><option value="4">非虚拟</option></select></div>
               <div class="form-group"><label>手机号（查码/释放用）</label><input id="apiPhoneNum-<%= p.id %>" placeholder="选填或输入完整手机号"></div>
               <div class="form-group"><label>操作</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-primary" type="button" onclick="apiAction(<%= p.id %>, 'get-phone')">获取号码</button><button class="btn btn-success" type="button" onclick="apiAction(<%= p.id %>, 'get-code')">查验证码</button><button class="btn btn-danger" type="button" onclick="apiAction(<%= p.id %>, 'blacklist')">拉黑</button><button class="btn" type="button" style="background:#f39c12;color:#fff" onclick="apiAction(<%= p.id %>, 'release')">释放</button></div></div>
@@ -161,6 +161,13 @@
       button.textContent = old;
     }
 
+    function updateApiDirectScope(select, providerId) {
+      var option = select && select.options ? select.options[select.selectedIndex] : null;
+      var directScope = option && option.dataset ? option.dataset.directScope || '' : '';
+      var hint = document.getElementById('apiDirectScope-' + providerId);
+      if (hint) hint.textContent = 'API 指定号段：' + (directScope || '未设置（上游可能返回任意号码）');
+    }
+
     async function apiAction(providerId, action) {
       var select = document.getElementById('apiChannelId-' + providerId);
       var channelId = select.value;
@@ -176,11 +183,14 @@
       resultBox.className = 'message message-info';
       resultBox.textContent = '执行中...';
       var option = select.options[select.selectedIndex];
+      var directScope = option.dataset.directScope || '';
+      updateApiDirectScope(select, providerId);
       var params = {
         project_id: channelId,
         channel_id: option.dataset.channelId || '',
         operator: option.dataset.operator || document.getElementById('apiOperator-' + providerId).value,
-        scope: option.dataset.scope || ''
+        scope: option.dataset.scope || '',
+        direct_scope: directScope
       };
       if (phone) params.phone_num = phone;
       if (action === 'blacklist' || action === 'release') params.phone_no = phone;

@@ -55,7 +55,7 @@
         <% }); %>
       </div>
 
-      <% providers.forEach(function(p, index) { const providerChannels = channels.filter(function(ch){ return Number(ch.provider_id) === Number(p.id); }); %>
+      <% providers.forEach(function(p, index) { const providerChannels = channels.filter(function(ch){ return Number(ch.provider_id) === Number(p.id); }); const initialDebugChannel = providerChannels[0] || null; const initialDebugDirectScope = initialDebugChannel && initialDebugChannel.direct_scope ? initialDebugChannel.direct_scope : ''; %>
         <section class="card provider-panel <%= index === 0 ? 'is-active' : '' %>" data-provider-panel="<%= p.id %>"><div class="card-body">
           <div class="provider-hero">
             <div><h3><%= p.name %> <span class="provider-type"><%= p.provider_type %></span></h3><p><%= p.description || '当前平台的账号配置、绑定项目和调试工具都集中在这里。' %></p></div>
@@ -87,7 +87,7 @@
             <h3 style="margin:22px 0 4px"><%= p.name %> API 调试工具</h3>
             <p style="font-size:13px;color:#888;margin:4px 0 14px">下面的操作只会调用 <%= p.name %> 已绑定的项目。</p>
             <div class="debug-grid">
-              <div class="form-group"><label>项目</label><select id="apiChannelId-<%= p.id %>" onchange="updateApiDirectScope(this, <%= p.id %>)"><option value="">-- 选择项目 --</option><% providerChannels.forEach(function(ch) { const directScope = ch.direct_scope || ''; %><option value="<%= ch.id %>" data-channel-id="<%= ch.channel_id || '' %>" data-operator="<%= ch.operator || 0 %>" data-scope="<%= ch.scope || '' %>" data-direct-scope="<%= directScope %>"><%= ch.name %><%= directScope ? '（API 指定号段：' + directScope + '）' : '' %></option><% }); %></select><div id="apiDirectScope-<%= p.id %>" class="field-hint">API 指定号段：未设置</div></div>
+              <div class="form-group"><label>项目</label><select id="apiChannelId-<%= p.id %>" onchange="updateApiDirectScope(this, <%= p.id %>)"><option value="">-- 选择项目 --</option><% providerChannels.forEach(function(ch, channelIndex) { const directScope = ch.direct_scope || ''; %><option value="<%= ch.id %>" data-channel-id="<%= ch.channel_id || '' %>" data-operator="<%= ch.operator || 0 %>" data-scope="<%= ch.scope || '' %>" data-direct-scope="<%= directScope %>" <%= channelIndex === 0 ? 'selected' : '' %>><%= ch.name %><%= directScope ? '（API 指定号段：' + directScope + '）' : '' %></option><% }); %></select><div id="apiDirectScope-<%= p.id %>" class="field-hint"><% if (initialDebugDirectScope) { %>API 指定号段：<%= initialDebugDirectScope %>（已启用，后台取号会以项目保存的设置为准）<% } else { %>API 指定号段：未设置（上游可能返回任意号码）<% } %></div></div>
               <div class="form-group"><label>运营商</label><select id="apiOperator-<%= p.id %>"><option value="0">不限</option><option value="1">移动</option><option value="2">联通</option><option value="3">电信</option><option value="4">非虚拟</option></select></div>
               <div class="form-group"><label>手机号（查码/释放用）</label><input id="apiPhoneNum-<%= p.id %>" placeholder="选填或输入完整手机号"></div>
               <div class="form-group"><label>操作</label><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-primary" type="button" onclick="apiAction(<%= p.id %>, 'get-phone')">获取号码</button><button class="btn btn-success" type="button" onclick="apiAction(<%= p.id %>, 'get-code')">查验证码</button><button class="btn btn-danger" type="button" onclick="apiAction(<%= p.id %>, 'blacklist')">拉黑</button><button class="btn" type="button" style="background:#f39c12;color:#fff" onclick="apiAction(<%= p.id %>, 'release')">释放</button></div></div>
@@ -165,7 +165,10 @@
       var option = select && select.options ? select.options[select.selectedIndex] : null;
       var directScope = option && option.dataset ? option.dataset.directScope || '' : '';
       var hint = document.getElementById('apiDirectScope-' + providerId);
-      if (hint) hint.textContent = 'API 指定号段：' + (directScope || '未设置（上游可能返回任意号码）');
+      if (!hint) return;
+      hint.textContent = directScope
+        ? 'API 指定号段：' + directScope + '（已启用，后台取号会以项目保存的设置为准）'
+        : 'API 指定号段：未设置（上游可能返回任意号码）';
     }
 
     async function apiAction(providerId, action) {
@@ -183,14 +186,11 @@
       resultBox.className = 'message message-info';
       resultBox.textContent = '执行中...';
       var option = select.options[select.selectedIndex];
-      var directScope = option.dataset.directScope || '';
       updateApiDirectScope(select, providerId);
       var params = {
         project_id: channelId,
         channel_id: option.dataset.channelId || '',
-        operator: option.dataset.operator || document.getElementById('apiOperator-' + providerId).value,
-        scope: option.dataset.scope || '',
-        direct_scope: directScope
+        operator: document.getElementById('apiOperator-' + providerId).value
       };
       if (phone) params.phone_num = phone;
       if (action === 'blacklist' || action === 'release') params.phone_no = phone;
@@ -224,6 +224,15 @@
         resultBox.textContent = '请求失败：' + error.message;
       }
     }
+
+    // Browsers can restore a previously selected project without firing
+    // onchange. Sync the displayed direct scope as soon as the page opens.
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('select[id^="apiChannelId-"]').forEach(function(select) {
+        var providerId = select.id.slice('apiChannelId-'.length);
+        updateApiDirectScope(select, providerId);
+      });
+    });
 
     function showUoomsgResult(providerId, message, kind, raw) {
       var box = document.getElementById('uoomsgResult-' + providerId);

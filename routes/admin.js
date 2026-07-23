@@ -350,7 +350,7 @@ router.get('/dashboard', requireAdmin, (req, res) => {
 router.get('/api-providers', requireAdmin, (req, res) => {
   const db = getDb();
   const channels = db.prepare(`
-    SELECT ch.id, ch.name, ch.channel_id, ch.operator, ch.scope, ch.api_keyword,
+    SELECT ch.id, ch.name, ch.channel_id, ch.operator, ch.scope, ch.direct_scope, ch.api_keyword,
            ap.id AS provider_id, ap.name AS provider_name, ap.provider_type
     FROM channels ch
     JOIN api_providers ap ON ap.id=ch.provider_id
@@ -462,10 +462,15 @@ router.post('/api-providers/test/:id', requireAdmin, async (req, res) => {
   try {
     const result = await providerService.getBalance(provider);
     const balance = extractProviderBalance(result);
+    const hasBalance = balance !== null && balance !== undefined && balance !== '';
     res.json({
       success: true,
       balance,
-      message: balance == null ? '连接成功，但服务商未返回余额数值' : ''
+      message: hasBalance
+        ? ''
+        : provider.provider_type === 'qc86'
+          ? 'QC86 连接成功，Token 已验证。该账户的余额接口未返回余额字段，不影响取号、取码或 API 指定号段。'
+          : '连接成功，但服务商未返回余额数值'
     });
   } catch (error) {
     res.json({ success: false, error: error.message });
@@ -811,10 +816,10 @@ router.post('/api/get-phone', requireAdmin, async (req, res) => {
   const requestChannel = {
     ...channel,
     operator: req.body.operator == null ? channel.operator : parseInt(req.body.operator || 0),
-    scope: req.body.scope == null ? channel.scope : req.body.scope,
-    direct_scope: req.body.direct_scope == null
-      ? channel.direct_scope
-      : normalizeDirectScope(req.body.direct_scope)
+    // Project settings are authoritative. Do not let a stale debug page clear
+    // the direct scope that was already saved for this project.
+    scope: channel.scope,
+    direct_scope: channel.direct_scope
   };
   try {
     const token = await providerService.getToken(provider);

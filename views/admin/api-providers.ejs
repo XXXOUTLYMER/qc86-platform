@@ -200,7 +200,11 @@
           resultBox.innerHTML = '验证码：<strong>' + data.data.code + '</strong>' + (data.data.modle ? '<br>' + data.data.modle : '');
         } else if (data.success) {
           resultBox.className = 'message message-success';
-          resultBox.textContent = action === 'blacklist' ? '号码已拉黑' : action === 'release' ? '号码已释放' : '操作成功';
+          resultBox.textContent = action === 'blacklist'
+            ? '号码已拉黑'
+            : action === 'release'
+              ? '号码已释放'
+              : (data.msg || data.message || '服务商未返回可用号码，请检查项目配置或稍后再试');
         } else {
           resultBox.className = 'message message-error';
           resultBox.textContent = data.error || data.msg || data.message || '操作失败';

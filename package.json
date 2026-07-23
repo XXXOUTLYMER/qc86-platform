@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test:api": "node tests/uoomsg.mock.test.js",
+    "test:api": "node tests/uoomsg.mock.test.js && node tests/qc86.mock.test.js",
     "test:card-keys": "node tests/cardKeyCodes.test.js"
   },
   "dependencies": {

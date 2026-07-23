@@ -44,7 +44,21 @@ async function getPhone(provider, channel, token, options = {}) {
       : channel;
     return uoomsg.getPhone(provider, token, requestChannel);
   }
-  return qc86.getPhone(token, channel.channel_id, channel.operator, channel.scope || null, provider);
+  const requestPhone = requestToken => qc86.getPhone(
+    requestToken,
+    channel.channel_id,
+    channel.operator,
+    channel.scope || null,
+    provider
+  );
+  const firstResult = await requestPhone(token);
+
+  // qc86 tokens can expire while a long-running platform is online. Refresh
+  // once and repeat the same request so the user does not see a false failure.
+  if (!qc86.isTokenFailure(firstResult)) return firstResult;
+  const refreshedToken = await qc86.login(provider);
+  const retriedResult = await requestPhone(refreshedToken);
+  return { ...retriedResult, providerToken: refreshedToken };
 }
 
 async function getCode(provider, channel, token, phone) {
@@ -77,7 +91,7 @@ async function queryUsed(provider, token) {
 }
 
 async function getPhoneWithPrefix(provider, channel, options = {}) {
-  const token = options.token || await getToken(provider);
+  let token = options.token || await getToken(provider);
   const prefixList = channel.prefix
     ? String(channel.prefix).split(/[,，\s]+/).map(value => value.trim()).filter(Boolean)
     : [];
@@ -129,6 +143,7 @@ async function getPhoneWithPrefix(provider, channel, options = {}) {
       let result;
       try {
         result = await getPhone(provider, channel, token, options);
+        if (result && result.providerToken) token = result.providerToken;
       } catch (error) {
         result = { success: false, msg: error.message };
       }

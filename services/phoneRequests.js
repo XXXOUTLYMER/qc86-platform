@@ -218,7 +218,7 @@ function runPhoneRequest(cardId) {
       const phoneNumber = phoneResult.data.mobile;
       const refreshTime = phoneResult.data.refreshTime || 5000;
       const smsTaskId = phoneResult.data.smsTask?.id || '';
-      const tokenValue = phoneResult.data.smsTask?.token || token;
+      const tokenValue = phoneResult.data.smsTask?.token || phoneResult.token || token;
       db.prepare(`
         UPDATE card_keys
         SET phone_number=?, token=?, sms_task_id=?, used_at=datetime('now','localtime'),

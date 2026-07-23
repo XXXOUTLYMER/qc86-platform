@@ -6,6 +6,68 @@ function providerBaseUrl(provider) {
   return provider && provider.base_url ? String(provider.base_url).replace(/\/$/, '') : config.qc86.baseUrl;
 }
 
+function responseMessage(result, fallback = '服务商请求失败') {
+  if (!result || typeof result !== 'object') return fallback;
+  const data = result.data && typeof result.data === 'object' ? result.data : {};
+  const candidates = [
+    result.msg,
+    result.message,
+    result.error,
+    data.msg,
+    data.message,
+    data.error
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return fallback;
+}
+
+function getRequestErrorMessage(error, fallback = '无法连接号码服务') {
+  const body = error && error.response && error.response.data;
+  if (body && typeof body === 'object') return responseMessage(body, fallback);
+  if (body && typeof body === 'string' && body.trim()) return body.trim();
+  if (error && error.code === 'ECONNABORTED') return '号码服务响应超时，请稍后重试';
+  return (error && error.message) || fallback;
+}
+
+function normalizePhoneResult(result) {
+  if (!result || typeof result !== 'object') {
+    return { success: false, msg: '号码服务返回格式异常' };
+  }
+  if (result.success === false) {
+    return { ...result, msg: responseMessage(result, '号码服务暂未返回可用号码') };
+  }
+
+  const data = result.data && typeof result.data === 'object' ? result.data : {};
+  const phone = [
+    data.mobile,
+    data.phone,
+    data.phoneNo,
+    data.phone_no,
+    data.phoneNum,
+    data.phone_num,
+    result.mobile,
+    result.phone,
+    result.phoneNo,
+    result.phone_no
+  ].find(value => value !== null && value !== undefined && String(value).trim() !== '');
+
+  if (!phone) {
+    return {
+      ...result,
+      success: false,
+      msg: responseMessage(result, '服务商已响应，但没有返回可用手机号')
+    };
+  }
+  return { ...result, success: true, data: { ...data, mobile: String(phone).trim() } };
+}
+
+function isTokenFailure(result) {
+  if (!result || result.success !== false) return false;
+  return /(token|令牌|登录|登陆|授权|认证|失效|过期|invalid|expired|unauthori[sz]ed)/i.test(responseMessage(result, ''));
+}
+
 function getToken(provider) {
   if (provider && provider.id) return provider.token || '';
   const db = getDb();
@@ -50,10 +112,14 @@ async function getWallet(token, provider) {
 async function getPhone(token, channelId, operator = 0, scope = null, provider) {
   const params = { token, channelId, operator };
   if (scope) params.scope = scope;
-  const resp = await axios.get(`${providerBaseUrl(provider)}/getPhone`, {
-    params, timeout: 10000
-  });
-  return resp.data;
+  try {
+    const resp = await axios.get(`${providerBaseUrl(provider)}/getPhone`, {
+      params, timeout: 10000
+    });
+    return normalizePhoneResult(resp.data);
+  } catch (error) {
+    return { success: false, msg: getRequestErrorMessage(error) };
+  }
 }
 
 async function getCode(token, channelId, phoneNum, maxAttempts = 100, provider) {
@@ -139,4 +205,16 @@ async function getPhoneWithPrefix(token, channelId, operator, scope, prefix, opt
   };
 }
  
-module.exports = { getToken, login, getWallet, getPhone, getCode, blacklistPhone, releasePhone, getPhoneWithPrefix };
+module.exports = {
+  getToken,
+  login,
+  getWallet,
+  getPhone,
+  getCode,
+  blacklistPhone,
+  releasePhone,
+  getPhoneWithPrefix,
+  responseMessage,
+  normalizePhoneResult,
+  isTokenFailure
+};

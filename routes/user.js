@@ -99,6 +99,20 @@ function renderFilteringResult(res, db, channels, card, job) {
   });
 }
 
+function renderCardEntry(res, channels, cardCode = '', error = null) {
+  return res.render('user/index', {
+    channels,
+    step: 'enter_card',
+    error,
+    cardCode,
+    channelId: '',
+    phoneNumber: '',
+    smsCode: '',
+    smsMessage: '',
+    channelName: ''
+  });
+}
+
 function renderStoredCardState(res, db, channels, card) {
   const job = phoneRequests.getPhoneRequestJob(card.id);
   if (job && (job.state === 'queued' || job.state === 'running')) {
@@ -263,15 +277,17 @@ router.get('/', (req, res) => {
   // More secure: accept ?card=CODE (card key, not numeric ID)
   const cardCode = req.query.card;
   if (cardCode) {
-    const card = db.prepare('SELECT * FROM card_keys WHERE code = ?').get(cardCode.trim().toUpperCase());
+    const normalizedCode = cardCode.trim().toUpperCase();
+    const card = db.prepare('SELECT * FROM card_keys WHERE code = ?').get(normalizedCode);
     if (card) {
+      // A card explicitly supplied in the URL always wins over any older
+      // browser session. Without this, an unused new card could fall through
+      // and display the previous card's phone/SMS result.
+      req.session.lastCardId = card.id;
       if (renderStoredCardState(res, db, channels, card)) return;
+      return renderCardEntry(res, channels, card.code);
     } else {
-      return res.render('user/index', {
-        channels, step: 'enter_card', error: '卡密不存在或已被删除',
-        cardCode: cardCode.trim().toUpperCase(), channelId: '',
-        phoneNumber: '', smsCode: '', smsMessage: '', channelName: ''
-      });
+      return renderCardEntry(res, channels, normalizedCode, '卡密不存在或已被删除');
     }
   }
  
@@ -279,29 +295,22 @@ router.get('/', (req, res) => {
   if (cardId) {
     const card = db.prepare('SELECT * FROM card_keys WHERE id = ?').get(cardId);
     if (card) {
+      req.session.lastCardId = card.id;
       if (renderStoredCardState(res, db, channels, card)) return;
+      return renderCardEntry(res, channels, card.code);
     }
+    return renderCardEntry(res, channels, '', '卡密不存在或已被删除');
   }
 
   // Fallback: card_id from session (user closed tab and came back)
-  if (!exitRequested && !cardId && req.session.lastCardId) {
+  if (!exitRequested && req.session.lastCardId) {
     const card = db.prepare('SELECT * FROM card_keys WHERE id = ?').get(req.session.lastCardId);
     if (card) {
       if (renderStoredCardState(res, db, channels, card)) return;
     }
   }
 
-  res.render('user/index', {
-    channels,
-    step: 'enter_card',
-    error: null,
-    cardCode: '',
-    channelId: '',
-    phoneNumber: '',
-    smsCode: '',
-    smsMessage: '',
-    channelName: ''
-  });
+  renderCardEntry(res, channels);
 });
 
 // A refreshed legacy POST result can otherwise land on a missing GET route.
@@ -327,9 +336,12 @@ router.post('/redeem', async (req, res) => {
     });
   }
 
+  // Keep refresh/reopen bound to the card the user just submitted, including
+  // cards that are currently waiting, cooling down, or already exhausted.
+  req.session.lastCardId = card.id;
+
   const resultSnapshot = getCardResultSnapshot(db, card);
   if (resultSnapshot.phone_number) {
-    req.session.lastCardId = card.id;
     return res.redirect(303, getCardResultUrl(card.code));
   }
 

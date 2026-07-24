@@ -12,6 +12,7 @@ const { extractProviderBalance } = require('../api/providerBalance');
 const uoomsg = require('../api/uoomsg');
 const { registerRejectedPhone, releaseRejectedPhone } = require('./rejectedPhones');
 const { generateCardCode } = require('../services/cardKeyCodes');
+const { createBatchId, groupCardsByBatch, normalizeBatchId } = require('../services/cardBatches');
 const githubPublisher = require('../services/githubPublisher');
 
 const router = express.Router();
@@ -676,6 +677,7 @@ router.get('/cards', requireAdmin, (req, res) => {
   `;
   const cardsStmt = db.prepare(cardsSql);
   const cards = params.length ? cardsStmt.all(params) : cardsStmt.all();
+  const cardBatches = groupCardsByBatch(cards);
   const totalStats = db.prepare(`
     SELECT
       COUNT(*) as total,
@@ -688,6 +690,7 @@ router.get('/cards', requireAdmin, (req, res) => {
     admin: req.session.admin,
     channels,
     cards,
+    cardBatches,
     defaultChannel: defaultChannel ? defaultChannel.value : '',
     statusFilter,
     searchQuery,
@@ -697,12 +700,28 @@ router.get('/cards', requireAdmin, (req, res) => {
   });
 });
 
+router.get('/cards/batches/:batchId/export', requireAdmin, (req, res) => {
+  const db = getDb();
+  const batchId = normalizeBatchId(req.params.batchId);
+
+  if (!batchId || batchId.length > 80) {
+    return res.status(400).json({ success: false, error: '批次号无效' });
+  }
+
+  const cards = db.prepare('SELECT code FROM card_keys WHERE batch_id=? ORDER BY id ASC').all([batchId]);
+  if (!cards.length) {
+    return res.status(404).json({ success: false, error: '未找到该批次卡密' });
+  }
+
+  res.json({ success: true, batchId, codes: cards.map((card) => card.code) });
+});
+
 router.post('/cards/generate', requireAdmin, (req, res) => {
   const db = getDb();
   const { channel_id, count, remark, max_attempts } = req.body;
   const qty = parseInt(count) || 10;
   const maxAtt = parseInt(max_attempts) || 3;
-  const batchId = 'B' + Date.now().toString(36).toUpperCase();
+  const batchId = createBatchId();
 
   try {
     db.exec('BEGIN');

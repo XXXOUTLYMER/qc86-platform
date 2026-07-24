@@ -1167,6 +1167,31 @@ tbody tr:hover { background: #fafbfc; }
 .field-test { display: block; min-height: 0; }
 .test-option { width: 100%; box-sizing: border-box; cursor: pointer; }
 .cards-list-panel { padding: 0; overflow: hidden; }
+.batch-group-row td {
+  padding: 0 !important;
+  background: #f7f7f8;
+  border-bottom: 1px solid #ececf0 !important;
+}
+.batch-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+}
+.batch-group-meta,
+.batch-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.batch-group-title { color: #1d1d1f; font-size: 12px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.batch-group-count { color: #0066d6; background: rgba(0, 122, 255, .10); padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 650; }
+.batch-group-project { color: #6e6e73; font-size: 11px; }
+.batch-group-remark { max-width: 240px; overflow: hidden; color: #6e6e73; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.batch-group-time { color: #8e8e93; font-size: 11px; white-space: nowrap; }
 .batch-bar {
   justify-content: space-between;
   gap: 12px;
@@ -1836,6 +1861,29 @@ tbody td { vertical-align: middle; }
 }
 
 @media (max-width: 700px) {
+  .cards-table-wrap .table-apple tbody tr.batch-group-row {
+    grid-column: 1 / -1;
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid #ececf0;
+    background: #f7f7f8;
+    box-shadow: none;
+  }
+  .cards-table-wrap .table-apple tbody tr.batch-group-row td {
+    display: block;
+    min-height: 0;
+    padding: 0 !important;
+    text-align: left !important;
+  }
+  .cards-table-wrap .table-apple tbody tr.batch-group-row td::before { display: none; }
+  .batch-group-header { align-items: flex-start; padding: 10px 11px; }
+  .batch-group-meta { gap: 5px 7px; }
+  .batch-group-title { width: 100%; overflow-wrap: anywhere; }
+  .batch-group-remark { max-width: 180px; }
+  .batch-group-time { width: 100%; }
+  .batch-group-actions { width: 100%; }
+  .batch-group-actions .btn-apple { flex: 1 1 auto; min-height: 34px; }
   .cards-table-wrap .table-apple tbody {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;

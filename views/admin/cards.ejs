@@ -160,7 +160,28 @@
           <tbody>
             <% if (cards.length === 0) { %>
             <tr class="cards-empty-row"><td colspan="11" class="empty">暂无卡密</td></tr>
-            <% } else { cards.forEach(function(c) { %>
+            <% } else { cardBatches.forEach(function(batch) { %>
+            <tr class="batch-group-row">
+              <td colspan="11">
+                <div class="batch-group-header">
+                  <div class="batch-group-meta">
+                    <span class="batch-group-title"><%= batch.isLegacy ? '历史未分批卡密' : '批次 ' + batch.batchId %></span>
+                    <span class="batch-group-count"><%= batch.cards.length %> 张</span>
+                    <% if (batch.channelName) { %><span class="batch-group-project"><%= batch.channelName %></span><% } %>
+                    <% if (batch.remark) { %><span class="batch-group-remark"><%= batch.remark %></span><% } %>
+                    <% if (batch.createdAt) { %><span class="batch-group-time"><%= batch.createdAt %></span><% } %>
+                  </div>
+                  <div class="batch-group-actions">
+                    <% if (!batch.isLegacy) { %>
+                    <button type="button" class="btn-apple btn-apple-xs btn-apple-secondary" data-batch-id="<%= batch.batchId %>" onclick="copyBatch(this.dataset.batchId, 'codes')">整批复制卡密</button>
+                    <button type="button" class="btn-apple btn-apple-xs btn-apple-secondary" data-batch-id="<%= batch.batchId %>" onclick="copyBatch(this.dataset.batchId, 'links')">整批复制链接</button>
+                    <% } %>
+                    <button type="button" class="btn-apple btn-apple-xs btn-apple-secondary" data-batch-key="<%= batch.key %>" onclick="selectBatch(this.dataset.batchKey)">勾选本页</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <% batch.cards.forEach(function(c) { %>
             <%
               var displayStatus = c.display_status || c.status || 'unused';
               var statusText = {'unused':'未使用','used':'已使用','expired':'已过期'}[displayStatus] || displayStatus;
@@ -171,7 +192,7 @@
               }[displayStatus] || '';
             %>
             <tr id="card-row-<%= c.id %>">
-              <td class="card-select-cell" data-label="选择"><label class="check-apple card-select-control"><input type="checkbox" class="card-check" value="<%= c.id %>" aria-label="选择卡密 <%= c.code %>"><span class="card-select-text">选择</span></label></td>
+              <td class="card-select-cell" data-label="选择"><label class="check-apple card-select-control"><input type="checkbox" class="card-check" value="<%= c.id %>" data-batch-key="<%= batch.key %>" aria-label="选择卡密 <%= c.code %>"><span class="card-select-text">选择</span></label></td>
               <td data-label="ID"><%= c.id %></td>
               <td data-label="卡密">
                 <div class="card-code-group">
@@ -232,7 +253,7 @@
                 </div>
               </td>
             </tr>
-            <% }) } %>
+            <% }) }) } %>
           </tbody>
         </table>
       </div>
@@ -282,6 +303,10 @@
     function clearSelection() {
       document.querySelectorAll('.card-check').forEach(function(cb) { cb.checked = false; });
       lastCheckedCard = null;
+      updateCount();
+    }
+    function selectBatch(batchKey) {
+      document.querySelectorAll('.card-check[data-batch-key="' + batchKey + '"]').forEach(function(cb) { cb.checked = true; });
       updateCount();
     }
     function getSelected() {
@@ -512,6 +537,21 @@
     function copyLink(code) {
       var url = window.location.origin + '/?card=' + code;
       copyToClipboard(url, '链接已复制');
+    }
+    async function copyBatch(batchId, type) {
+      try {
+        var response = await fetch('/admin/cards/batches/' + encodeURIComponent(batchId) + '/export');
+        var data = await response.json();
+        if (!response.ok || !data.success || !data.codes || !data.codes.length) {
+          throw new Error(data.error || '未找到该批次卡密');
+        }
+        var text = type === 'links'
+          ? data.codes.map(function(code) { return window.location.origin + '/?card=' + code; }).join('\n')
+          : data.codes.join('\n');
+        copyToClipboard(text, '已复制该批次 ' + data.codes.length + ' 张' + (type === 'links' ? '链接' : '卡密'));
+      } catch (error) {
+        showToast(error.message || '批次复制失败', 'error');
+      }
     }
   </script>
 </body>

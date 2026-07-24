@@ -7,6 +7,15 @@ const projectRoot = path.resolve(__dirname, '..');
 const GIT_TIMEOUT_MS = 60000;
 let isPublishing = false;
 
+function getGitOptions() {
+  return {
+    cwd: projectRoot,
+    timeout: GIT_TIMEOUT_MS,
+    maxBuffer: 1024 * 1024,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+  };
+}
+
 function redactOutput(value) {
   return String(value || '')
     .replace(/(https?:\/\/)[^\s/@]+@/gi, '$1[REDACTED]@')
@@ -18,6 +27,9 @@ function redactOutput(value) {
 
 function cleanGitError(error) {
   const details = redactOutput(error && (error.stderr || error.stdout || error.message));
+  if (/SSL_ERROR_SYSCALL|Could not resolve host|Failed to connect|Connection reset|Recv failure|Network is unreachable/i.test(details)) {
+    return '无法连接到 GitHub。请检查当前 Mac 的网络、DNS 或代理连接后再发布；系统已自动尝试兼容连接方式。';
+  }
   if (/could not read Username|terminal prompts disabled|Authentication failed|Permission denied/i.test(details)) {
     return 'GitHub 登录未完成或当前账号没有仓库权限。请先在 Mac 的终端完成一次 GitHub 登录后再试。';
   }
@@ -30,16 +42,32 @@ function cleanGitError(error) {
   return details || 'Git 操作失败，请稍后再试。';
 }
 
+function isHttpsConnectionError(error) {
+  const details = String(error && (error.stderr || error.stdout || error.message) || '');
+  return /SSL_ERROR_SYSCALL|Failed to connect|Connection reset|Recv failure|Connection timed out/i.test(details);
+}
+
+async function executeGit(args) {
+  const { stdout, stderr } = await execFileAsync('git', args, getGitOptions());
+  return { stdout: String(stdout || '').trim(), stderr: String(stderr || '').trim() };
+}
+
 async function runGit(args) {
   try {
-    const { stdout, stderr } = await execFileAsync('git', args, {
-      cwd: projectRoot,
-      timeout: GIT_TIMEOUT_MS,
-      maxBuffer: 1024 * 1024,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
-    });
-    return { stdout: String(stdout || '').trim(), stderr: String(stderr || '').trim() };
+    return await executeGit(args);
   } catch (error) {
+    // GitHub occasionally terminates HTTP/2 TLS connections on some macOS
+    // networks. Retry only the failed command with HTTP/1.1 before surfacing
+    // a network error; local Git commands stay on their normal fast path.
+    if (isHttpsConnectionError(error)) {
+      try {
+        return await executeGit(['-c', 'http.version=HTTP/1.1', ...args]);
+      } catch (retryError) {
+        const safeError = new Error(cleanGitError(retryError));
+        safeError.code = retryError && retryError.code;
+        throw safeError;
+      }
+    }
     const safeError = new Error(cleanGitError(error));
     safeError.code = error && error.code;
     throw safeError;

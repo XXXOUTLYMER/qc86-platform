@@ -236,6 +236,7 @@ async function initDb() {
   try { db.exec("ALTER TABLE channels ADD COLUMN direct_scope TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE card_keys ADD COLUMN max_attempts INTEGER DEFAULT 3"); } catch(e) {}
   try { db.exec("ALTER TABLE card_keys ADD COLUMN attempts INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE card_keys ADD COLUMN batch_id TEXT"); } catch(e) {}
   try { db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_channel_id', '')"); } catch(e) {}
   try { db.exec("ALTER TABLE card_keys ADD COLUMN is_test INTEGER DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE channels ADD COLUMN prefix TEXT DEFAULT ''"); } catch(e) {}
